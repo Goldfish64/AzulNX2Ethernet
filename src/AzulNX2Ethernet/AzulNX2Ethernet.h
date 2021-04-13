@@ -19,7 +19,7 @@
 #define super IOEthernetController
 
 class AzulNX2Ethernet : public IOEthernetController {
-  OSDeclareDefaultStructors (AzulNX2Ethernet);
+  OSDeclareDefaultStructors(AzulNX2Ethernet);
   
 private:
   IOPCIDevice                 *pciNub;
@@ -32,21 +32,33 @@ private:
   IOEthernetInterface         *ethInterface;
   IOEthernetAddress           *ethAddress;
   
+  bool                        isChip5709;
   UInt32                      shMemBase;
   
+  UInt16                      fwSyncSeq = 0;
   
-  UInt32 readReg32 (UInt32 offset);
-  UInt32 readRegIndr32 (UInt32 offset);
-  UInt32 readShMem32 (UInt32 offset);
-  UInt32 readContext32 (UInt32 offset);
   
-  void writeReg32 (UInt32 offset, UInt32 value);
-  void writeRegIndr32 (UInt32 offset, UInt32 value);
-  void writeShMem32 (UInt32 offset, UInt32 value);
-  void writeContext32 (UInt32 offset, UInt32 value);
+  UInt32 readReg32(UInt32 offset);
+  UInt32 readRegIndr32(UInt32 offset);
+  UInt32 readShMem32(UInt32 offset);
+  UInt32 readContext32(UInt32 offset);
+  
+  void writeReg32(UInt32 offset, UInt32 value);
+  void writeRegIndr32(UInt32 offset, UInt32 value);
+  void writeShMem32(UInt32 offset, UInt32 value);
+  void writeContext32(UInt32 offset, UInt32 value);
+  
+  bool firmwareSync(UInt32 msgData);
+  
+  
+  bool prepareController();
+  bool resetController(UInt32 resetCode);
+  bool initControllerChip();
   
 public:
-  virtual bool start (IOService *provider);
+  virtual bool start(IOService *provider);
+  
+  virtual IOReturn getHardwareAddress(IOEthernetAddress *address);
   
   
 

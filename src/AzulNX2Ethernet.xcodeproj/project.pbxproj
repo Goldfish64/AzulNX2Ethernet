@@ -11,6 +11,7 @@
 		41D739AA2625050E00CD96B7 /* AzulNX2Ethernet.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 41D739A92625050E00CD96B7 /* AzulNX2Ethernet.cpp */; };
 		41E932EF2625057700AAD2D2 /* libkmod.a in Frameworks */ = {isa = PBXBuildFile; fileRef = 41E932EE2625057700AAD2D2 /* libkmod.a */; };
 		41E932F42625078000AAD2D2 /* Private.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 41E932F32625078000AAD2D2 /* Private.cpp */; };
+		41E932F92625157E00AAD2D2 /* Controller.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 41E932F82625157E00AAD2D2 /* Controller.cpp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -21,6 +22,7 @@
 		41E932EE2625057700AAD2D2 /* libkmod.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = libkmod.a; path = MacKernelSDK/Library/x86_64/libkmod.a; sourceTree = "<group>"; };
 		41E932F22625066800AAD2D2 /* Registers.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Registers.h; sourceTree = "<group>"; };
 		41E932F32625078000AAD2D2 /* Private.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Private.cpp; sourceTree = "<group>"; };
+		41E932F82625157E00AAD2D2 /* Controller.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Controller.cpp; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -60,6 +62,7 @@
 				41D739AB2625050E00CD96B7 /* Info.plist */,
 				41E932F22625066800AAD2D2 /* Registers.h */,
 				41E932F32625078000AAD2D2 /* Private.cpp */,
+				41E932F82625157E00AAD2D2 /* Controller.cpp */,
 			);
 			path = AzulNX2Ethernet;
 			sourceTree = "<group>";
@@ -151,6 +154,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				41D739AA2625050E00CD96B7 /* AzulNX2Ethernet.cpp in Sources */,
+				41E932F92625157E00AAD2D2 /* Controller.cpp in Sources */,
 				41E932F42625078000AAD2D2 /* Private.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
