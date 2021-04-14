@@ -5030,3 +5030,76 @@
 
 #define DMA_READ_CHANS  5
 #define DMA_WRITE_CHANS  3
+
+
+#define CTX_INIT_RETRY_COUNT        10
+
+/* Context size. */
+#define CTX_PAGE_SIZE   0x1000
+#define CTX_PAGE_CNT    2
+
+
+#define CTX_SHIFT    7
+#define CTX_SIZE    (1 << CTX_SHIFT)
+#define CTX_MASK    (CTX_SIZE - 1)
+#define GET_CID_ADDR(_cid)  ((_cid) << CTX_SHIFT)
+#define GET_CID(_cid_addr)  ((_cid_addr) >> CTX_SHIFT)
+
+#define PHY_CTX_SHIFT    6
+#define PHY_CTX_SIZE    (1 << PHY_CTX_SHIFT)
+#define PHY_CTX_MASK    (PHY_CTX_SIZE - 1)
+#define GET_PCID_ADDR(_pcid)  ((_pcid) << PHY_CTX_SHIFT)
+#define GET_PCID(_pcid_addr)  ((_pcid_addr) >> PHY_CTX_SHIFT)
+
+#define MB_KERNEL_CTX_SHIFT  8
+#define MB_KERNEL_CTX_SIZE  (1 << MB_KERNEL_CTX_SHIFT)
+#define MB_KERNEL_CTX_MASK  (MB_KERNEL_CTX_SIZE - 1)
+#define MB_GET_CID_ADDR(_cid)  (0x10000 + ((_cid) << MB_KERNEL_CTX_SHIFT))
+
+#define MAX_CID_CNT    0x4000
+#define MAX_CID_ADDR    (GET_CID_ADDR(MAX_CID_CNT))
+#define INVALID_CID_ADDR  0xffffffff
+
+#define TX_CID      16
+#define RX_CID      0
+
+#define DEFAULT_TX_QUICK_CONS_TRIP_INT  20
+#define DEFAULT_TX_QUICK_CONS_TRIP    20
+#define DEFAULT_TX_TICKS_INT      80
+#define DEFAULT_TX_TICKS        80
+#define DEFAULT_RX_QUICK_CONS_TRIP_INT  6
+#define DEFAULT_RX_QUICK_CONS_TRIP    6
+#define DEFAULT_RX_TICKS_INT      18
+#define DEFAULT_RX_TICKS        18
+
+/****************************************************************************/
+/* BCE Processor Firmwware Load Definitions                                 */
+/****************************************************************************/
+
+struct cpu_reg {
+  UInt32 mode;
+  UInt32 mode_value_halt;
+  UInt32 mode_value_sstep;
+
+  UInt32 state;
+  UInt32 state_value_clear;
+
+  UInt32 gpr0;
+  UInt32 evmask;
+  UInt32 pc;
+  UInt32 inst;
+  UInt32 bp;
+
+  UInt32 spad_base;
+
+  UInt32 mips_view_base;
+};
+
+
+#define RV2P_PROC1    0
+#define RV2P_PROC2    1
+
+#define RV2P_P1_FIXUP_PAGE_SIZE_IDX    0
+#define RV2P_BD_PAGE_SIZE_MSK      0xffff
+#define RV2P_BD_PAGE_SIZE      ((0x1000 / 16) - 1) // TODO: define 4K page size somewhere
+

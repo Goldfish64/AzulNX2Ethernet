@@ -45,11 +45,18 @@ bool AzulNX2Ethernet::resetController(UInt32 resetCode) {
   readReg32(NX2_MISC_ENABLE_CLR_BITS);
   IODelay(10);
   
+  if (isChip5709) {
+    reg = readReg32(NX2_MISC_NEW_CORE_CTL);
+    reg &= ~NX2_MISC_NEW_CORE_CTL_DMA_ENABLE;
+    writeReg32(NX2_MISC_NEW_CORE_CTL, reg);
+  }
+  
   do {
     //
     // Prepare firmware for software reset.
     //
     if (!firmwareSync(NX2_DRV_MSG_DATA_WAIT0 | resetCode)) {
+      IOLog("AzulNX2Ethernet: reset signal timeout!\n");
       break;
     }
     writeShMem32(NX2_DRV_RESET_SIGNATURE, NX2_DRV_RESET_SIGNATURE_MAGIC);
@@ -64,7 +71,7 @@ bool AzulNX2Ethernet::resetController(UInt32 resetCode) {
     if (isChip5709) {
       writeReg32(NX2_MISC_COMMAND, NX2_MISC_COMMAND_SW_RESET);
       readReg32(NX2_MISC_COMMAND);
-      IODelay(5);
+      IOSleep(50);
       
       pciNub->configWrite32(NX2_PCICFG_MISC_CONFIG,
                             NX2_PCICFG_MISC_CONFIG_REG_WINDOW_ENA |
@@ -88,6 +95,7 @@ bool AzulNX2Ethernet::resetController(UInt32 resetCode) {
       // Verify reset completed.
       //
       if ((reg & (NX2_PCICFG_MISC_CONFIG_CORE_RST_REQ | NX2_PCICFG_MISC_CONFIG_CORE_RST_BSY))) {
+        IOLog("AzulNX2Ethernet: reset timeout!\n");
         break;
       }
     }
@@ -97,24 +105,28 @@ bool AzulNX2Ethernet::resetController(UInt32 resetCode) {
     //
     reg = readReg32(NX2_PCI_SWAP_DIAG0);
     if (reg != 0x01020304) {
+      IOLog("AzulNX2Ethernet: byte swapping is invalid!\n");
       break;;
     }
     
     //
     // Wait for firmware to initialize again.
     //
+    IOLog("AzulNX2Ethernet: NX2_DRV_MSG_DATA_WAIT1\n");
     if (!firmwareSync(NX2_DRV_MSG_DATA_WAIT1 | resetCode)) {
+      IOLog("AzulNX2Ethernet: failed 33\n");
       break;
     }
     
     success = true;
+    IOLog("AzulNX2Ethernet: reset completed\n");
   } while (false);
   
   //
   // TODO: Restore EMAC for ASF and IPMI.
   //
   
-  IOLog("AzulNX2Ethernet: reset completed\n");
+  
 
   return success;
 }
@@ -151,6 +163,12 @@ bool AzulNX2Ethernet::initControllerChip() {
   //
   // Initialize context and start CPUs.
   //
+  if (!initContext()) {
+    return false;
+  }
+  if (!initCpus()) {
+    return false;
+  }
   
   
   return true;

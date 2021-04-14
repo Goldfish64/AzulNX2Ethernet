@@ -14,6 +14,7 @@
 #include <IOKit/network/IOBasicOutputQueue.h>
 #include <IOKit/pci/IOPCIDevice.h>
 
+#include "FirmwareStructs.h"
 #include "Registers.h"
 
 #define super IOEthernetController
@@ -35,7 +36,22 @@ private:
   bool                        isChip5709;
   UInt32                      shMemBase;
   
+  IOBufferMemoryDescriptor    *stsBlockDesc;
+  IODMACommand                *stsBlockCmd;
+  void                        *stsBlockData;
+  IOBufferMemoryDescriptor    *statsBlockDesc;
+  IODMACommand                *statsBlockCmd;
+  void                        *statsBlockData;
+  IOBufferMemoryDescriptor    *ctxBlockDesc;
+  IODMACommand                *ctxBlockCmd;
+  IODMACommand::Segment64     ctxBlockSeg;
+  void                        *ctxBlockData;
+  
+  
   UInt16                      fwSyncSeq = 0;
+  
+  const UInt8                 *firmwareRv2p;
+  const UInt8                 *firmwareMips;
   
   
   UInt32 readReg32(UInt32 offset);
@@ -48,7 +64,14 @@ private:
   void writeShMem32(UInt32 offset, UInt32 value);
   void writeContext32(UInt32 offset, UInt32 value);
   
+  bool allocMemory();
   bool firmwareSync(UInt32 msgData);
+  bool initContext();
+  bool initCpus();
+  
+  UInt32 processRv2pFixup(UInt32 rv2pProc, UInt32 index, UInt32 fixup, UInt32 rv2pCode);
+  void loadRv2pFirmware(const nx2_rv2p_fw_file_entry_t *rv2p, UInt32 rv2pProcessor);
+  bool loadCpuFirmware();
   
   
   bool prepareController();
