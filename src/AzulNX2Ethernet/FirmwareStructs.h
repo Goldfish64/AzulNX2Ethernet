@@ -2,6 +2,32 @@
 #ifndef __FIRMWARE_STRUCTS_H__
 #define __FIRMWARE_STRUCTS_H__
 
+#define RV2P_PROC1    0
+#define RV2P_PROC2    1
+
+#define RV2P_P1_FIXUP_PAGE_SIZE_IDX    0
+#define RV2P_BD_PAGE_SIZE_MSK      0xffff
+#define RV2P_BD_PAGE_SIZE      ((0x1000 / 16) - 1) // TODO: define 4K page size somewhere
+
+typedef struct {
+  UInt32  mode;
+  UInt32  modeValueHalt;
+  UInt32  modeValueSstep;
+
+  UInt32  state;
+  UInt32  stateValueClear;
+
+  UInt32  gpr0;
+  UInt32  evmask;
+  UInt32  pc;
+  UInt32  inst;
+  UInt32  bp;
+
+  UInt32  spadBase;
+
+  UInt32  mipsViewBase;
+} cpu_reg_t;
+
 typedef struct {
   UInt32  address;
   UInt32  length;

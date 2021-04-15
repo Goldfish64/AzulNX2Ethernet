@@ -67,11 +67,18 @@ private:
   bool allocMemory();
   bool firmwareSync(UInt32 msgData);
   bool initContext();
-  bool initCpus();
+  void initCpus();
   
   UInt32 processRv2pFixup(UInt32 rv2pProc, UInt32 index, UInt32 fixup, UInt32 rv2pCode);
-  void loadRv2pFirmware(const nx2_rv2p_fw_file_entry_t *rv2p, UInt32 rv2pProcessor);
-  bool loadCpuFirmware();
+  void loadRv2pFirmware(UInt32 rv2pProcessor, const nx2_rv2p_fw_file_entry_t *rv2pEntry);
+  void loadCpuFirmware(const cpu_reg_t *cpuReg, const nx2_mips_fw_file_entry_t *mipsEntry);
+  void startCpu(const cpu_reg_t *cpuReg);
+  void stopCpu(const cpu_reg_t *cpuReg);
+  void initCpuRxp();
+  void initCpuTxp();
+  void initCpuTpat();
+  void initCpuCom();
+  void initCpuCp();
   
   
   bool prepareController();

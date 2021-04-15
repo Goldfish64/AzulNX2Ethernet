@@ -166,9 +166,7 @@ bool AzulNX2Ethernet::initControllerChip() {
   if (!initContext()) {
     return false;
   }
-  if (!initCpus()) {
-    return false;
-  }
+  initCpus();
   
   
   return true;

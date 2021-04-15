@@ -5072,34 +5072,3 @@
 #define DEFAULT_RX_TICKS_INT      18
 #define DEFAULT_RX_TICKS        18
 
-/****************************************************************************/
-/* BCE Processor Firmwware Load Definitions                                 */
-/****************************************************************************/
-
-struct cpu_reg {
-  UInt32 mode;
-  UInt32 mode_value_halt;
-  UInt32 mode_value_sstep;
-
-  UInt32 state;
-  UInt32 state_value_clear;
-
-  UInt32 gpr0;
-  UInt32 evmask;
-  UInt32 pc;
-  UInt32 inst;
-  UInt32 bp;
-
-  UInt32 spad_base;
-
-  UInt32 mips_view_base;
-};
-
-
-#define RV2P_PROC1    0
-#define RV2P_PROC2    1
-
-#define RV2P_P1_FIXUP_PAGE_SIZE_IDX    0
-#define RV2P_BD_PAGE_SIZE_MSK      0xffff
-#define RV2P_BD_PAGE_SIZE      ((0x1000 / 16) - 1) // TODO: define 4K page size somewhere
-
