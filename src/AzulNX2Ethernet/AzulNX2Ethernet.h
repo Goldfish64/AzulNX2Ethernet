@@ -31,7 +31,7 @@ private:
   IOInterruptEventSource      *intSource;
   
   IOEthernetInterface         *ethInterface;
-  IOEthernetAddress           *ethAddress;
+  IOEthernetAddress           ethAddress;
   
   bool                        isChip5709;
   UInt32                      shMemBase;
@@ -66,6 +66,7 @@ private:
   
   bool allocMemory();
   bool firmwareSync(UInt32 msgData);
+  void fetchMacAddress();
   bool initContext();
   void initCpus();
   

@@ -136,6 +136,10 @@ bool AzulNX2Ethernet::initControllerChip() {
   
   // TODO: disable interrupts here.
   
+  // disable heartbeat
+  writeShMem32(NX2_DRV_PULSE_MB, NX2_DRV_MSG_DATA_PULSE_CODE_ALWAYS_ALIVE);
+  readShMem32(NX2_DRV_PULSE_MB);
+  
   //
   // Configure DMA and byte-swapping.
   // The NetXtreme II is big endian and we are little endian.
@@ -168,6 +172,28 @@ bool AzulNX2Ethernet::initControllerChip() {
   }
   initCpus();
   
+  reg = readReg32(NX2_MQ_CONFIG);
+  reg &= ~NX2_MQ_CONFIG_KNL_BYP_BLK_SIZE;
+  reg |= NX2_MQ_CONFIG_KNL_BYP_BLK_SIZE_256;
+  
+  if (isChip5709) {
+    reg |= NX2_MQ_CONFIG_BIN_MQ_MODE;
+  }
+  writeReg32(NX2_MQ_CONFIG, reg);
+  
+  reg = 0x10000 + (MAX_CID_CNT * MB_KERNEL_CTX_SIZE);
+  writeReg32(NX2_MQ_KNL_BYP_WIND_START, reg);
+  writeReg32(NX2_MQ_KNL_WIND_END, reg);
+  
+  reg = 4 << 24;
+  writeReg32(NX2_RV2P_CONFIG, reg);
+  
+  reg = readReg32(NX2_TBDR_CONFIG);
+  reg &= ~NX2_TBDR_CONFIG_PAGE_SIZE;
+  reg |= 4 << 24 | 0x40;
+  writeReg32(NX2_TBDR_CONFIG, reg);
+  
+  fetchMacAddress();
   
   return true;
 }

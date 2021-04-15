@@ -63,9 +63,12 @@ bool AzulNX2Ethernet::start(IOService *provider) {
 
   bool result = started;
   
+  result = attachInterface((IONetworkInterface **)&ethInterface);
+  
   return result;
 }
 
 IOReturn AzulNX2Ethernet::getHardwareAddress(IOEthernetAddress *address) {
-  return kIOReturnUnsupported;
+  memcpy (address, &ethAddress, kIOEthernetAddressSize);
+  return kIOReturnSuccess;
 }
