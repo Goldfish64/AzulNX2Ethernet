@@ -164,6 +164,8 @@ bool AzulNX2Ethernet::initControllerChip() {
              NX2_MISC_ENABLE_STATUS_BITS_RX_V2P_ENABLE |
              NX2_MISC_ENABLE_STATUS_BITS_CONTEXT_ENABLE);
   
+  allocMemory();
+  
   //
   // Initialize context and start CPUs.
   //
@@ -194,6 +196,51 @@ bool AzulNX2Ethernet::initControllerChip() {
   writeReg32(NX2_TBDR_CONFIG, reg);
   
   fetchMacAddress();
+  
+  writeReg32(NX2_HC_STATUS_ADDR_L, (stsBlockSeg.fIOVMAddr & 0xFFFFFFFF));
+  writeReg32(NX2_HC_STATUS_ADDR_H, stsBlockSeg.fIOVMAddr >> 32);
+  
+  writeReg32(NX2_HC_STATISTICS_ADDR_L, (statsBlockSeg.fIOVMAddr & 0xFFFFFFFF));
+  writeReg32(NX2_HC_STATISTICS_ADDR_H, statsBlockSeg.fIOVMAddr >> 32);
+  
+  if (isChip5709) {
+    reg = readReg32(NX2_MISC_NEW_CORE_CTL);
+    reg |= NX2_MISC_NEW_CORE_CTL_DMA_ENABLE;
+    writeReg32(NX2_MISC_NEW_CORE_CTL, reg);
+  }
+  
+  firmwareSync(NX2_DRV_MSG_DATA_WAIT2 | NX2_DRV_MSG_CODE_RESET);
+  
+  if (isChip5709) {
+    writeReg32(NX2_MISC_ENABLE_SET_BITS, NX2_MISC_ENABLE_DEFAULT_XI);
+  }
+  
+  reg = NX2_L2CTX_TX_TYPE_TYPE_L2_XI | NX2_L2CTX_TX_TYPE_SIZE_L2_XI;
+  writeContext32(GET_CID_ADDR(TX_CID), NX2_L2CTX_TX_TYPE_XI, reg);
+  reg = NX2_L2CTX_TX_CMD_TYPE_TYPE_L2_XI | (8 << 16);
+  writeContext32(GET_CID_ADDR(TX_CID), NX2_L2CTX_TX_CMD_TYPE_XI, reg);
+  
+  reg = txBlockSeg.fIOVMAddr >> 32;
+  writeContext32(GET_CID_ADDR(TX_CID), NX2_L2CTX_TX_TBDR_BHADDR_HI_XI, reg);
+  reg = txBlockSeg.fIOVMAddr & 0xFFFFFFFF;
+  writeContext32(GET_CID_ADDR(TX_CID), NX2_L2CTX_TX_TBDR_BHADDR_LO_XI, reg);
+  
+  tx_bd *bd = (tx_bd*)txBlockData;
+  
+  memset(bd, 0, 0x10);
+  
+  IOLog("cleanred\n");
+  
+  bd->tx_bd_haddr_hi = rxBlockSeg.fIOVMAddr >> 32;
+  bd->tx_bd_haddr_lo = rxBlockSeg.fIOVMAddr & 0xFFFFFFFF;
+  bd->tx_bd_mss_nbytes = 48;
+  bd->tx_bd_flags = TX_BD_FLAGS_START | TX_BD_FLAGS_END | TX_BD_FLAGS_DONT_GEN_CRC;
+  
+  writeReg16(MB_GET_CID_ADDR(TX_CID) +
+             NX2_L2MQ_TX_HOST_BIDX, 20);
+  writeReg32(MB_GET_CID_ADDR(TX_CID) +
+             NX2_L2MQ_TX_HOST_BSEQ, 1);
+  
   
   return true;
 }

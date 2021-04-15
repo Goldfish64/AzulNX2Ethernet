@@ -38,14 +38,24 @@ private:
   
   IOBufferMemoryDescriptor    *stsBlockDesc;
   IODMACommand                *stsBlockCmd;
+  IODMACommand::Segment64     stsBlockSeg;
   void                        *stsBlockData;
   IOBufferMemoryDescriptor    *statsBlockDesc;
   IODMACommand                *statsBlockCmd;
+  IODMACommand::Segment64     statsBlockSeg;
   void                        *statsBlockData;
   IOBufferMemoryDescriptor    *ctxBlockDesc;
   IODMACommand                *ctxBlockCmd;
   IODMACommand::Segment64     ctxBlockSeg;
   void                        *ctxBlockData;
+  IOBufferMemoryDescriptor    *txBlockDesc;
+  IODMACommand                *txBlockCmd;
+  IODMACommand::Segment64     txBlockSeg;
+  void                        *txBlockData;
+  IOBufferMemoryDescriptor    *rxBlockDesc;
+  IODMACommand                *rxBlockCmd;
+  IODMACommand::Segment64     rxBlockSeg;
+  void                        *rxBlockData;
   
   
   UInt16                      fwSyncSeq = 0;
@@ -59,10 +69,11 @@ private:
   UInt32 readShMem32(UInt32 offset);
   UInt32 readContext32(UInt32 offset);
   
+  void writeReg16(UInt32 offset, UInt16 value);
   void writeReg32(UInt32 offset, UInt32 value);
   void writeRegIndr32(UInt32 offset, UInt32 value);
   void writeShMem32(UInt32 offset, UInt32 value);
-  void writeContext32(UInt32 offset, UInt32 value);
+  void writeContext32(UInt32 cid, UInt32 offset, UInt32 value);
   
   bool allocMemory();
   bool firmwareSync(UInt32 msgData);

@@ -23,6 +23,10 @@ UInt32 AzulNX2Ethernet::readShMem32(UInt32 offset) {
   return readRegIndr32(shMemBase + offset);
 }
 
+void AzulNX2Ethernet::writeReg16(UInt32 offset, UInt16 value) {
+  OSWriteLittleInt16(baseAddr, offset, value);
+}
+
 /**
  Writes the specified register using memory space.
  */
@@ -45,6 +49,25 @@ void AzulNX2Ethernet::writeShMem32(UInt32 offset, UInt32 value) {
   writeRegIndr32(shMemBase + offset, value);
 }
 
+void AzulNX2Ethernet::writeContext32(UInt32 cid, UInt32 offset, UInt32 value) {
+  UInt32 reg = 0;
+  
+  if (isChip5709) {
+    writeReg32(NX2_CTX_CTX_DATA, value);
+    writeReg32(NX2_CTX_CTX_CTRL, offset | NX2_CTX_CTX_CTRL_WRITE_REQ);
+    
+    for (int i = 0; i < 100; i++) {
+      reg = readReg32(NX2_CTX_CTX_CTRL);
+      IOLog("Context write %X\n", reg);
+      if ((reg & NX2_CTX_CTX_CTRL_WRITE_REQ) == 0) {
+        IOLog("Context write done!\n");
+        return;
+      }
+      IODelay(5);
+    }
+  }
+}
+
 bool AzulNX2Ethernet::allocMemory() {
   IODMACommand::Segment64 seg;
   UInt64 offset = 0;
@@ -65,9 +88,25 @@ bool AzulNX2Ethernet::allocMemory() {
   
   stsBlockCmd = IODMACommand::withSpecification(kIODMACommandOutputHost64, 64, 0, IODMACommand::kMapped, 0, 1);
   stsBlockCmd->setMemoryDescriptor(stsBlockDesc);
-  stsBlockCmd->gen64IOVMSegments(&offset, &seg, &numSegs);
+  stsBlockCmd->gen64IOVMSegments(&offset, &stsBlockSeg, &numSegs);
   
   memset(stsBlockData, 0, 0x1000);
+  
+  //
+  // Allocate memory for stats block.
+  //
+  statsBlockDesc = IOBufferMemoryDescriptor::inTaskWithPhysicalMask(kernel_task,
+                                                                  kIODirectionInOut | kIOMemoryPhysicallyContiguous | kIOMapInhibitCache,
+                                                                  0x1000, // TODO
+                                                                  0xFFFFFFFFFFFFF000ULL);
+  statsBlockDesc->prepare();
+  statsBlockData = statsBlockDesc->getBytesNoCopy();
+  
+  statsBlockCmd = IODMACommand::withSpecification(kIODMACommandOutputHost64, 64, 0, IODMACommand::kMapped, 0, 1);
+  statsBlockCmd->setMemoryDescriptor(statsBlockDesc);
+  statsBlockCmd->gen64IOVMSegments(&offset, &statsBlockSeg, &numSegs);
+  
+  memset(statsBlockData, 0, 0x1000);
   
   //
   // Allocate memory for context if on a 5709/5716.
@@ -88,6 +127,38 @@ bool AzulNX2Ethernet::allocMemory() {
     
     memset(ctxBlockData, 0, CTX_PAGE_SIZE * CTX_PAGE_CNT);
   }
+  
+  //
+  // Allocate memory for TX block.
+  //
+  txBlockDesc = IOBufferMemoryDescriptor::inTaskWithPhysicalMask(kernel_task,
+                                                                  kIODirectionInOut | kIOMemoryPhysicallyContiguous | kIOMapInhibitCache,
+                                                                  0x1000, // TODO
+                                                                  0xFFFFFFFFFFFFF000ULL);
+  txBlockDesc->prepare();
+  txBlockData = txBlockDesc->getBytesNoCopy();
+  
+  txBlockCmd = IODMACommand::withSpecification(kIODMACommandOutputHost64, 64, 0, IODMACommand::kMapped, 0, 1);
+  txBlockCmd->setMemoryDescriptor(txBlockDesc);
+  txBlockCmd->gen64IOVMSegments(&offset, &txBlockSeg, &numSegs);
+  
+  memset(txBlockData, 0, 0x1000);
+  
+  //
+  // Allocate memory for RX block.
+  //
+  rxBlockDesc = IOBufferMemoryDescriptor::inTaskWithPhysicalMask(kernel_task,
+                                                                  kIODirectionInOut | kIOMemoryPhysicallyContiguous | kIOMapInhibitCache,
+                                                                  0x1000, // TODO
+                                                                  0xFFFFFFFFFFFFF000ULL);
+  rxBlockDesc->prepare();
+  rxBlockData = rxBlockDesc->getBytesNoCopy();
+  
+  rxBlockCmd = IODMACommand::withSpecification(kIODMACommandOutputHost64, 64, 0, IODMACommand::kMapped, 0, 1);
+  rxBlockCmd->setMemoryDescriptor(rxBlockDesc);
+  rxBlockCmd->gen64IOVMSegments(&offset, &rxBlockSeg, &numSegs);
+  
+  memset(rxBlockData, 0, 0x1000);
   
   return true;
 }
@@ -207,6 +278,8 @@ bool AzulNX2Ethernet::initContext() {
       if ((reg & NX2_CTX_HOST_PAGE_TBL_CTRL_WRITE_REQ) != 0) {
         return false;
       }
+      
+      ctxAddr += 0x1000;
     }
     
   }
