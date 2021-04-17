@@ -58,14 +58,31 @@ void AzulNX2Ethernet::writeContext32(UInt32 cid, UInt32 offset, UInt32 value) {
     
     for (int i = 0; i < 100; i++) {
       reg = readReg32(NX2_CTX_CTX_CTRL);
-      IOLog("Context write %X\n", reg);
+     // IOLog("Context write %X\n", reg);
       if ((reg & NX2_CTX_CTX_CTRL_WRITE_REQ) == 0) {
-        IOLog("Context write done!\n");
+       // IOLog("Context write done!\n");
         return;
       }
       IODelay(5);
     }
   }
+}
+
+void AzulNX2Ethernet::enableInterrupts(bool coalNow) {
+  writeReg32(NX2_PCICFG_INT_ACK_CMD,
+             NX2_PCICFG_INT_ACK_CMD_INDEX_VALID |
+             NX2_PCICFG_INT_ACK_CMD_MASK_INT |
+             lastStatusIndex);
+  writeReg32(NX2_PCICFG_INT_ACK_CMD, NX2_PCICFG_INT_ACK_CMD_INDEX_VALID | lastStatusIndex);
+  
+  if (coalNow) {
+    writeReg32(NX2_HC_COMMAND, readReg32(NX2_HC_COMMAND) | NX2_HC_COMMAND_COAL_NOW);
+  }
+}
+
+void AzulNX2Ethernet::disableInterrupts() {
+  writeReg32(NX2_PCICFG_INT_ACK_CMD, NX2_PCICFG_INT_ACK_CMD_MASK_INT);
+  readReg32(NX2_PCICFG_INT_ACK_CMD);
 }
 
 bool AzulNX2Ethernet::allocMemory() {

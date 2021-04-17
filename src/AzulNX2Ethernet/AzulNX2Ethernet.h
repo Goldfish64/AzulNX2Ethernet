@@ -29,6 +29,7 @@ private:
   
   IOWorkLoop                  *workloop;
   IOInterruptEventSource      *intSource;
+  OSDictionary                *mediumDict;
   
   IOEthernetInterface         *ethInterface;
   IOEthernetAddress           ethAddress;
@@ -63,6 +64,8 @@ private:
   const UInt8                 *firmwareRv2p;
   const UInt8                 *firmwareMips;
   
+  UInt16                      lastStatusIndex = 0;
+  
   
   UInt32 readReg32(UInt32 offset);
   UInt32 readRegIndr32(UInt32 offset);
@@ -74,6 +77,9 @@ private:
   void writeRegIndr32(UInt32 offset, UInt32 value);
   void writeShMem32(UInt32 offset, UInt32 value);
   void writeContext32(UInt32 cid, UInt32 offset, UInt32 value);
+  
+  void enableInterrupts(bool coalNow);
+  void disableInterrupts();
   
   bool allocMemory();
   bool firmwareSync(UInt32 msgData);
@@ -92,10 +98,11 @@ private:
   void initCpuCom();
   void initCpuCp();
   
-  
   bool prepareController();
   bool resetController(UInt32 resetCode);
   bool initControllerChip();
+  
+  void interruptOccurred(IOInterruptEventSource *source, int count);
   
 public:
   virtual bool start(IOService *provider);

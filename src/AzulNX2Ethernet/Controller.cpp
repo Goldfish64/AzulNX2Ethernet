@@ -134,7 +134,7 @@ bool AzulNX2Ethernet::resetController(UInt32 resetCode) {
 bool AzulNX2Ethernet::initControllerChip() {
   UInt32 reg = 0;
   
-  // TODO: disable interrupts here.
+  disableInterrupts();
   
   // disable heartbeat
   writeShMem32(NX2_DRV_PULSE_MB, NX2_DRV_MSG_DATA_PULSE_CODE_ALWAYS_ALIVE);
@@ -174,6 +174,9 @@ bool AzulNX2Ethernet::initControllerChip() {
   }
   initCpus();
   
+  writeReg32(NX2_EMAC_ATTENTION_ENA, NX2_EMAC_ATTENTION_ENA_LINK);
+   
+  
   reg = readReg32(NX2_MQ_CONFIG);
   reg &= ~NX2_MQ_CONFIG_KNL_BYP_BLK_SIZE;
   reg |= NX2_MQ_CONFIG_KNL_BYP_BLK_SIZE_256;
@@ -203,6 +206,14 @@ bool AzulNX2Ethernet::initControllerChip() {
   writeReg32(NX2_HC_STATISTICS_ADDR_L, (statsBlockSeg.fIOVMAddr & 0xFFFFFFFF));
   writeReg32(NX2_HC_STATISTICS_ADDR_H, statsBlockSeg.fIOVMAddr >> 32);
   
+  writeReg32(NX2_HC_STAT_COLLECT_TICKS, 0xbb8);
+  
+  writeReg32(NX2_HC_CONFIG, NX2_HC_CONFIG_RX_TMR_MODE | NX2_HC_CONFIG_TX_TMR_MODE |
+             NX2_HC_CONFIG_COLLECT_STATS);
+  
+  writeReg32(NX2_HC_COMMAND, NX2_HC_COMMAND_CLR_STAT_NOW);
+  writeReg32(NX2_HC_ATTN_BITS_ENABLE, 0x1);
+  
   if (isChip5709) {
     reg = readReg32(NX2_MISC_NEW_CORE_CTL);
     reg |= NX2_MISC_NEW_CORE_CTL_DMA_ENABLE;
@@ -214,6 +225,16 @@ bool AzulNX2Ethernet::initControllerChip() {
   if (isChip5709) {
     writeReg32(NX2_MISC_ENABLE_SET_BITS, NX2_MISC_ENABLE_DEFAULT_XI);
   }
+  readReg32(NX2_MISC_ENABLE_SET_BITS);
+  IODelay(20);
+  
+  enableInterrupts(true);
+  
+  
+  
+
+  tx_bd *bd = (tx_bd*)txBlockData;
+  tx_bd *bd2 = &bd[255];
   
   reg = NX2_L2CTX_TX_TYPE_TYPE_L2_XI | NX2_L2CTX_TX_TYPE_SIZE_L2_XI;
   writeContext32(GET_CID_ADDR(TX_CID), NX2_L2CTX_TX_TYPE_XI, reg);
@@ -225,21 +246,48 @@ bool AzulNX2Ethernet::initControllerChip() {
   reg = txBlockSeg.fIOVMAddr & 0xFFFFFFFF;
   writeContext32(GET_CID_ADDR(TX_CID), NX2_L2CTX_TX_TBDR_BHADDR_LO_XI, reg);
   
-  tx_bd *bd = (tx_bd*)txBlockData;
+  bd2->tx_bd_haddr_hi = txBlockSeg.fIOVMAddr >> 32;
+  bd2->tx_bd_haddr_lo = txBlockSeg.fIOVMAddr & 0xFFFFFFFF;
+
   
-  memset(bd, 0, 0x10);
+ // memset(bd, 0, 0x10);
   
   IOLog("cleanred\n");
+  
+  uint8_t *dd = (uint8_t*)rxBlockData;
+  dd[0] = 0x12;
+  dd[1] = 0x12;
+  dd[2] = 0x12;
+  dd[3] = 0x12;
+  dd[4] = 0x12;
+  dd[5] = 0x12;
+  dd[6] = ethAddress.bytes[0];
+  dd[7] = ethAddress.bytes[1];
+  dd[8] = ethAddress.bytes[2];
+  dd[9] = ethAddress.bytes[3];
+  dd[10] = ethAddress.bytes[4];
+  dd[11] = ethAddress.bytes[5];
+  dd[12] = 0x08;
+  dd[13] = 0x00;
+  
   
   bd->tx_bd_haddr_hi = rxBlockSeg.fIOVMAddr >> 32;
   bd->tx_bd_haddr_lo = rxBlockSeg.fIOVMAddr & 0xFFFFFFFF;
   bd->tx_bd_mss_nbytes = 48;
-  bd->tx_bd_flags = TX_BD_FLAGS_START | TX_BD_FLAGS_END | TX_BD_FLAGS_DONT_GEN_CRC;
+  bd->tx_bd_flags = TX_BD_FLAGS_START | TX_BD_FLAGS_END;
   
   writeReg16(MB_GET_CID_ADDR(TX_CID) +
-             NX2_L2MQ_TX_HOST_BIDX, 20);
+             NX2_L2MQ_TX_HOST_BIDX, 1);
   writeReg32(MB_GET_CID_ADDR(TX_CID) +
-             NX2_L2MQ_TX_HOST_BSEQ, 1);
+             NX2_L2MQ_TX_HOST_BSEQ, 48);
+  
+  IOSleep(1000);
+  
+  UInt32 *stats = (UInt32*)statsBlockData;
+  UInt32 *status = (UInt32*)stsBlockData;
+  
+  IOLog("TX %X %X %X %X %X\n", stats[0x10], stats[0x14], stats[0x18], stats[0x1c], stats[0x50]);
+  IOLog("STS %X %X\n", status[0], status[3]);
   
   
   return true;
