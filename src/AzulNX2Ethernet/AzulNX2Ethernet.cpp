@@ -102,9 +102,22 @@ bool AzulNX2Ethernet::start(IOService *provider) {
   bool result = started;
   
   result = attachInterface((IONetworkInterface **)&ethInterface);
-  setLinkStatus(kIONetworkLinkValid);
+  
+  SYSLOG("rev %X", NX2_CHIP_ID);
+
+  
+  //enableInterrupts(true);
+ // setLinkStatus(kIONetworkLinkValid);
   
   return result;
+}
+
+const OSString* AzulNX2Ethernet::newVendorString() const {
+  return OSString::withCString(getDeviceVendor());
+}
+
+const OSString* AzulNX2Ethernet::newModelString() const {
+  return OSString::withCString(getDeviceModel());
 }
 
 IOReturn AzulNX2Ethernet::getHardwareAddress(IOEthernetAddress *address) {
@@ -123,7 +136,7 @@ void AzulNX2Ethernet::interruptOccurred(IOInterruptEventSource *source, int coun
   //IOLog("INT\n");
  // IOLog("INT status %X ack %X, %X time %X IDX %X\n", hcsMem32[0], hcsMem32[1], hcsMem32[8], (((uint8_t*)stsBlockData)[0x34]), hcsMem32[13]);
   
-  IOLog("INT status %X (%X) index %u\n", sts->attnBits, sts->attnBitsAck, sts->index);
+  SYSLOG("INT status %X (%X) index %u", sts->attnBits, sts->attnBitsAck, sts->index);
   
   if ((sts->attnBits & STATUS_ATTN_BITS_LINK_STATE) != (sts->attnBitsAck & STATUS_ATTN_BITS_LINK_STATE)) {
     bool newLink = sts->attnBits & STATUS_ATTN_BITS_LINK_STATE;
@@ -132,11 +145,11 @@ void AzulNX2Ethernet::interruptOccurred(IOInterruptEventSource *source, int coun
     if (newLink) {
       writeReg32(NX2_PCICFG_STATUS_BIT_SET_CMD, STATUS_ATTN_BITS_LINK_STATE);
       setLinkStatus(kIONetworkLinkValid | kIONetworkLinkActive);
-      IOLog("Link UP\n");
+      SYSLOG("Link UP");
     } else {
       writeReg32(NX2_PCICFG_STATUS_BIT_CLEAR_CMD, STATUS_ATTN_BITS_LINK_STATE);
       setLinkStatus(kIONetworkLinkValid);
-      IOLog("Link DOWN\n");
+      SYSLOG("Link DOWN");
     }
     
     writeReg32(NX2_EMAC_STATUS, NX2_EMAC_STATUS_LINK_CHANGE);

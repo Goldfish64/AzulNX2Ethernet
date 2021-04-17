@@ -1,5 +1,68 @@
 
 /****************************************************************************/
+/* Device identification definitions.                                       */
+/****************************************************************************/
+#define BRCM_VENDORID               0x14E4
+#define BRCM_DEVICEID_BCM5706       0x164A
+#define BRCM_DEVICEID_BCM5706S      0x16AA
+#define BRCM_DEVICEID_BCM5708       0x164C
+#define BRCM_DEVICEID_BCM5708S      0x16AC
+#define BRCM_DEVICEID_BCM5709       0x1639
+#define BRCM_DEVICEID_BCM5709S      0x163A
+#define BRCM_DEVICEID_BCM5716       0x163B
+
+#define HP_VENDORID                 0x103C
+
+#define PCI_ANY_ID                  (UInt16) (~0U)
+
+/* chip num:16-31, rev:12-15, metal:4-11, bond_id:0-3 */
+
+#define NX2_CHIP_NUM           ((chipId) & 0xffff0000)
+#define NX2_CHIP_NUM_5706      0x57060000
+#define NX2_CHIP_NUM_5708      0x57080000
+#define NX2_CHIP_NUM_5709      0x57090000
+
+#define NX2_CHIP_REV           ((chipId) & 0x0000f000)
+#define NX2_CHIP_REV_Ax        0x00000000
+#define NX2_CHIP_REV_Bx        0x00001000
+#define NX2_CHIP_REV_Cx        0x00002000
+
+#define NX2_CHIP_METAL         ((chipId) & 0x00000ff0)
+#define NX2_CHIP_BOND          ((chipId) & 0x0000000f)
+
+#define NX2_CHIP_ID            ((chipId) & 0xfffffff0)
+#define NX2_CHIP_ID_5706_A0    0x57060000
+#define NX2_CHIP_ID_5706_A1    0x57060010
+#define NX2_CHIP_ID_5706_A2    0x57060020
+#define NX2_CHIP_ID_5706_A3    0x57060030
+#define NX2_CHIP_ID_5708_A0    0x57080000
+#define NX2_CHIP_ID_5708_B0    0x57081000
+#define NX2_CHIP_ID_5708_B1    0x57081010
+#define NX2_CHIP_ID_5708_B2    0x57081020
+#define NX2_CHIP_ID_5709_A0    0x57090000
+#define NX2_CHIP_ID_5709_A1    0x57090010
+#define NX2_CHIP_ID_5709_B0    0x57091000
+#define NX2_CHIP_ID_5709_B1    0x57091010
+#define NX2_CHIP_ID_5709_B2    0x57091020
+#define NX2_CHIP_ID_5709_C0    0x57092000
+
+#define NX2_CHIP_BOND_ID       ((chipId) & 0xf)
+
+/* A serdes chip will have the first bit of the bond id set. */
+#define NX2_CHIP_BOND_ID_SERDES_BIT  0x01
+
+/* shorthand one */
+#define NX2_ASICREV(x)      ((x) >> 28)
+#define NX2_ASICREV_BCM5700    0x06
+
+/* chip revisions */
+#define NX2_CHIPREV(x)      ((x) >> 24)
+#define NX2_CHIPREV_5700_AX    0x70
+#define NX2_CHIPREV_5700_BX    0x71
+#define NX2_CHIPREV_5700_CX    0x72
+#define NX2_CHIPREV_5701_AX    0x00
+
+/****************************************************************************/
 /* Shared Memory layout                                                     */
 /* The bootcode will initialize this data area with port configurtion       */
 /* information which can be accessed by the driver.                         */

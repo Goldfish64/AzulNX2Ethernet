@@ -5,6 +5,35 @@ bool AzulNX2Ethernet::prepareController() {
   UInt32 reg;
   
   //
+  // Get chip ID. Non-production revisions are not supported.
+  //
+  chipId = readReg32(NX2_MISC_ID);
+  switch (NX2_CHIP_ID) {
+    case NX2_CHIP_ID_5706_A0:
+    case NX2_CHIP_ID_5706_A1:
+    case NX2_CHIP_ID_5708_A0:
+    case NX2_CHIP_ID_5708_B0:
+    case NX2_CHIP_ID_5709_A0:
+    case NX2_CHIP_ID_5709_B0:
+    case NX2_CHIP_ID_5709_B1:
+    case NX2_CHIP_ID_5709_B2:
+      SYSLOG("Unsupported controller revision 0x%X", NX2_CHIP_ID);
+      return false;
+  }
+  
+  pciVendorId    = readReg16(kIOPCIConfigVendorID);
+  pciDeviceId    = readReg16(kIOPCIConfigDeviceID);
+  pciSubVendorId = readReg16(kIOPCIConfigSubSystemVendorID);
+  pciSubDeviceId = readReg16(kIOPCIConfigSubSystemID);
+  
+  char modelName[64];
+  snprintf(modelName, sizeof (modelName), "%s %s", getDeviceVendor(), getDeviceModel());
+  
+  SYSLOG("Controller is %s", modelName);
+
+  setProperty("model", modelName);
+  
+  //
   // Enable the REG_WINDOW register for indirect reads/writes, and enable mailbox word swapping.
   // The NetXtreme II is a big-endian system, and we are little-endian.
   //
@@ -25,7 +54,7 @@ bool AzulNX2Ethernet::prepareController() {
     shMemBase = HOST_VIEW_SHMEM_BASE;
   }
   
-  IOLog("AzulNX2Ethernet: Shared memory is at 0x%08X\n", shMemBase);
+  DBGLOG("Shared memory is at 0x%08X", shMemBase);
   
   return true;
 }

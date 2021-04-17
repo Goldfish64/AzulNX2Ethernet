@@ -19,6 +19,9 @@
 
 #define super IOEthernetController
 
+#define SYSLOG(str, ...) logPrint(str, ## __VA_ARGS__)
+#define DBGLOG(str, ...) logPrint(str, ## __VA_ARGS__)
+
 class AzulNX2Ethernet : public IOEthernetController {
   OSDeclareDefaultStructors(AzulNX2Ethernet);
   
@@ -26,6 +29,12 @@ private:
   IOPCIDevice                 *pciNub;
   IOMemoryMap                 *baseMemoryMap;
   volatile void               *baseAddr;
+  
+  UInt16                      pciVendorId;
+  UInt16                      pciDeviceId;
+  UInt16                      pciSubVendorId;
+  UInt16                      pciSubDeviceId;
+  UInt32                      chipId;
   
   IOWorkLoop                  *workloop;
   IOInterruptEventSource      *intSource;
@@ -66,7 +75,9 @@ private:
   
   UInt16                      lastStatusIndex = 0;
   
+  void logPrint(const char *format, ...);
   
+  UInt16 readReg16(UInt32 offset);
   UInt32 readReg32(UInt32 offset);
   UInt32 readRegIndr32(UInt32 offset);
   UInt32 readShMem32(UInt32 offset);
@@ -78,12 +89,14 @@ private:
   void writeShMem32(UInt32 offset, UInt32 value);
   void writeContext32(UInt32 cid, UInt32 offset, UInt32 value);
   
+  const char *getDeviceVendor() const;
+  const char *getDeviceModel() const;
+  
   void enableInterrupts(bool coalNow);
   void disableInterrupts();
   
   bool allocMemory();
   bool firmwareSync(UInt32 msgData);
-  void fetchMacAddress();
   bool initContext();
   void initCpus();
   
@@ -102,15 +115,32 @@ private:
   bool resetController(UInt32 resetCode);
   bool initControllerChip();
   
+  //
+  // PHY-related
+  //
+  void fetchMacAddress();
+  
   void interruptOccurred(IOInterruptEventSource *source, int count);
   
 public:
+  //
+  // IOService methods.
+  //
   virtual bool start(IOService *provider);
   
-  virtual IOReturn getHardwareAddress(IOEthernetAddress *address);
-  
-  
 
+  //
+  // IONetworkController methods.
+  //
+  virtual const OSString *newVendorString() const;
+  virtual const OSString *newModelString() const;
+ // virtual const OSString *newRevisionString() const;
+
+  
+  //
+  // IOEthernetController methods.
+  //
+  virtual IOReturn getHardwareAddress(IOEthernetAddress *address);
   
   
 };

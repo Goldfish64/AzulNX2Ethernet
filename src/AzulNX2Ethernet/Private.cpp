@@ -1,6 +1,78 @@
 #include "AzulNX2Ethernet.h"
 #include "Firmware.h"
 
+//
+// Device mappings.
+//
+static const struct nx2_device_type {
+  UInt16        vendorId;
+  UInt16        deviceId;
+  UInt16        subVendorId;
+  UInt16        subDeviceId;
+  const char    *vendor;
+  const char    *model;
+} deviceNames[] = {
+  //
+  // BCM5706C controllers.
+  //
+  { BRCM_VENDORID, BRCM_DEVICEID_BCM5706, PCI_ANY_ID, PCI_ANY_ID,
+    "QLogic", "NetXtreme II BCM5706 Gigabit Ethernet" },
+  
+  //
+  // BCM5706S controllers.
+  //
+  { BRCM_VENDORID, BRCM_DEVICEID_BCM5706S, PCI_ANY_ID, PCI_ANY_ID,
+    "QLogic", "NetXtreme II BCM5706S Gigabit Ethernet" },
+  
+  //
+  // BCM5708C controllers.
+  //
+  { BRCM_VENDORID, BRCM_DEVICEID_BCM5708, PCI_ANY_ID, PCI_ANY_ID,
+    "QLogic", "NetXtreme II BCM5708 Gigabit Ethernet" },
+  
+  //
+  // BCM5708S controllers.
+  //
+  { BRCM_VENDORID, BRCM_DEVICEID_BCM5708S, PCI_ANY_ID, PCI_ANY_ID,
+    "QLogic", "NetXtreme II BCM5708S Gigabit Ethernet" },
+  
+  //
+  // BCM5709C controllers.
+  //
+  { BRCM_VENDORID, BRCM_DEVICEID_BCM5709, PCI_ANY_ID, PCI_ANY_ID,
+    "QLogic", "NetXtreme II BCM5709 Gigabit Ethernet" },
+  
+  //
+  // BCM5709S controllers.
+  //
+  { BRCM_VENDORID, BRCM_DEVICEID_BCM5709S, PCI_ANY_ID, PCI_ANY_ID,
+    "QLogic", "NetXtreme II BCM5709S Gigabit Ethernet" },
+  
+  //
+  // BCM5716 controllers.
+  //
+  { BRCM_VENDORID, BRCM_DEVICEID_BCM5716, PCI_ANY_ID, PCI_ANY_ID,
+    "QLogic", "NetXtreme II BCM5716 Gigabit Ethernet" },
+};
+
+void AzulNX2Ethernet::logPrint(const char *format, ...) {
+  char tmp[1024];
+  tmp[0] = '\0';
+  va_list va;
+  va_start(va, format);
+  vsnprintf(tmp, sizeof (tmp), format, va);
+  va_end(va);
+  
+  IOLog("AzulNX2Ethernet: %s\n", tmp);
+}
+
+/**
+ Reads the specified register using memory space.
+ */
+UInt16 AzulNX2Ethernet::readReg16(UInt32 offset) {
+  return OSReadLittleInt16(baseAddr, offset);
+}
+
 /**
  Reads the specified register using memory space.
  */
@@ -66,6 +138,30 @@ void AzulNX2Ethernet::writeContext32(UInt32 cid, UInt32 offset, UInt32 value) {
       IODelay(5);
     }
   }
+}
+
+const char* AzulNX2Ethernet::getDeviceVendor() const {
+  for (UInt32 i = 0; i < sizeof (deviceNames); i++) {
+    if (pciVendorId == deviceNames[i].vendorId && pciDeviceId == deviceNames[i].deviceId &&
+        (pciSubVendorId == deviceNames[i].subVendorId || deviceNames[i].subVendorId == PCI_ANY_ID) &&
+        (pciDeviceId == deviceNames[i].subDeviceId || deviceNames[i].subDeviceId == PCI_ANY_ID)) {
+      return deviceNames[i].vendor;
+    }
+  }
+  
+  return NULL;
+}
+
+const char* AzulNX2Ethernet::getDeviceModel() const {
+  for (UInt32 i = 0; i < sizeof (deviceNames); i++) {
+    if (pciVendorId == deviceNames[i].vendorId && pciDeviceId == deviceNames[i].deviceId &&
+        (pciSubVendorId == deviceNames[i].subVendorId || deviceNames[i].subVendorId == PCI_ANY_ID) &&
+        (pciDeviceId == deviceNames[i].subDeviceId || deviceNames[i].subDeviceId == PCI_ANY_ID)) {
+      return deviceNames[i].model;
+    }
+  }
+  
+  return NULL;
 }
 
 void AzulNX2Ethernet::enableInterrupts(bool coalNow) {
@@ -218,26 +314,6 @@ bool AzulNX2Ethernet::firmwareSync(UInt32 msgData) {
   }
   
   return false;
-}
-
-void AzulNX2Ethernet::fetchMacAddress() {
-  //
-  // Pull MAC address from shared memory as this is the fastest.
-  // The NetXtreme also contains the MAC address in NVRAM.
-  //
-  UInt32 macLow   = readShMem32(NX2_PORT_HW_CFG_MAC_LOWER);
-  UInt32 macHigh  = readShMem32(NX2_PORT_HW_CFG_MAC_UPPER);
-  
-  ethAddress.bytes[0] = (UInt8) (macHigh >> 8);
-  ethAddress.bytes[1] = (UInt8) (macHigh >> 0);
-  ethAddress.bytes[2] = (UInt8) (macLow >> 24);
-  ethAddress.bytes[3] = (UInt8) (macLow >> 16);
-  ethAddress.bytes[4] = (UInt8) (macLow >> 8);
-  ethAddress.bytes[5] = (UInt8) (macLow >> 0);
-  
-  IOLog("AzulNX2Ethernet: MAC address %02X:%02X:%02X:%02X:%02X:%02X\n",
-        ethAddress.bytes[0], ethAddress.bytes[1], ethAddress.bytes[2],
-        ethAddress.bytes[3], ethAddress.bytes[4], ethAddress.bytes[5]);
 }
 
 bool AzulNX2Ethernet::initContext() {
