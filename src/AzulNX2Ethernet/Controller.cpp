@@ -21,6 +21,9 @@ bool AzulNX2Ethernet::prepareController() {
       return false;
   }
   
+  if (pciNub->getFunctionNumber() > 0)
+    return false;
+  
   pciVendorId    = readReg16(kIOPCIConfigVendorID);
   pciDeviceId    = readReg16(kIOPCIConfigDeviceID);
   pciSubVendorId = readReg16(kIOPCIConfigSubSystemVendorID);
@@ -205,6 +208,9 @@ bool AzulNX2Ethernet::initControllerChip() {
   
   writeReg32(NX2_EMAC_ATTENTION_ENA, NX2_EMAC_ATTENTION_ENA_LINK);
    
+  DBGLOG("EMAC reg is %X", readReg32(NX2_EMAC_MODE));
+  writeReg32(NX2_EMAC_MODE, readReg32(NX2_EMAC_MODE) | NX2_EMAC_MODE_PORT_GMII); //TODO: PHY needs to be configured correctly for traffic to work!!!
+  
   
   reg = readReg32(NX2_MQ_CONFIG);
   reg &= ~NX2_MQ_CONFIG_KNL_BYP_BLK_SIZE;
@@ -235,13 +241,16 @@ bool AzulNX2Ethernet::initControllerChip() {
   writeReg32(NX2_HC_STATISTICS_ADDR_L, (statsBlockSeg.fIOVMAddr & 0xFFFFFFFF));
   writeReg32(NX2_HC_STATISTICS_ADDR_H, statsBlockSeg.fIOVMAddr >> 32);
   
+  writeReg32(NX2_HC_TX_TICKS,
+        (1 << 16) | 1);
+  
   writeReg32(NX2_HC_STAT_COLLECT_TICKS, 0xbb8);
   
   writeReg32(NX2_HC_CONFIG, NX2_HC_CONFIG_RX_TMR_MODE | NX2_HC_CONFIG_TX_TMR_MODE |
              NX2_HC_CONFIG_COLLECT_STATS);
   
   writeReg32(NX2_HC_COMMAND, NX2_HC_COMMAND_CLR_STAT_NOW);
-  writeReg32(NX2_HC_ATTN_BITS_ENABLE, 0x1);
+  writeReg32(NX2_HC_ATTN_BITS_ENABLE, 0x1);//0xFFFFFFFF);//0x1 | (1<<18));
   
   if (isChip5709) {
     reg = readReg32(NX2_MISC_NEW_CORE_CTL);
@@ -257,13 +266,33 @@ bool AzulNX2Ethernet::initControllerChip() {
   readReg32(NX2_MISC_ENABLE_SET_BITS);
   IODelay(20);
   
-  //enableInterrupts(true);
+  reg = NX2_L2CTX_RX_CTX_TYPE_CTX_BD_CHN_TYPE_VALUE |
+  NX2_L2CTX_RX_CTX_TYPE_SIZE_L2 |
+  (0x02 << NX2_L2CTX_RX_BD_PRE_READ_SHIFT);
   
+ // writeContext32(GET_CID_ADDR(RX_CID), NX2_L2CTX_RX_CTX_TYPE, reg);
   
+  writeReg32(NX2_MQ_MAP_L2_5, readReg32(NX2_MQ_MAP_L2_5) | NX2_MQ_MAP_L2_5_ARM);
+  
+  rx_bd *rd = (rx_bd*)rxBlockData;
+  rx_bd *rd2 = &rd[255];
+  
+  reg = rxBlockSeg.fIOVMAddr >> 32;
+ // writeContext32(GET_CID_ADDR(RX_CID), NX2_L2CTX_RX_NX_BDHADDR_HI, reg);
+  reg = rxBlockSeg.fIOVMAddr & 0xFFFFFFFF;
+  //writeContext32(GET_CID_ADDR(RX_CID), NX2_L2CTX_RX_NX_BDHADDR_LO, reg);
+  
+  rd2->rx_bd_haddr_hi = rxBlockSeg.fIOVMAddr >> 32;
+  rd2->rx_bd_haddr_lo = rxBlockSeg.fIOVMAddr & 0xFFFFFFFF;
+  
+  //writeReg16(MB_GET_CID_ADDR(RX_CID) + NX2_L2MQ_RX_HOST_BDIDX, <#UInt16 value#>)
   
 
   tx_bd *bd = (tx_bd*)txBlockData;
   tx_bd *bd2 = &bd[255];
+  
+  bd2->tx_bd_haddr_hi = txBlockSeg.fIOVMAddr >> 32;
+  bd2->tx_bd_haddr_lo = txBlockSeg.fIOVMAddr & 0xFFFFFFFF;
   
   reg = NX2_L2CTX_TX_TYPE_TYPE_L2_XI | NX2_L2CTX_TX_TYPE_SIZE_L2_XI;
   writeContext32(GET_CID_ADDR(TX_CID), NX2_L2CTX_TX_TYPE_XI, reg);
@@ -275,21 +304,26 @@ bool AzulNX2Ethernet::initControllerChip() {
   reg = txBlockSeg.fIOVMAddr & 0xFFFFFFFF;
   writeContext32(GET_CID_ADDR(TX_CID), NX2_L2CTX_TX_TBDR_BHADDR_LO_XI, reg);
   
-  bd2->tx_bd_haddr_hi = txBlockSeg.fIOVMAddr >> 32;
-  bd2->tx_bd_haddr_lo = txBlockSeg.fIOVMAddr & 0xFFFFFFFF;
+
+  
+  enableInterrupts(true);
+  
+  IOSleep(5000);
 
   
  // memset(bd, 0, 0x10);
   
+  status_block_t *stsBlock = (status_block_t*)stsBlockData;
   IOLog("cleanred\n");
+  IOLog("TX STS %X\n", stsBlock->status_tx_quick_consumer_index0);
   
   uint8_t *dd = (uint8_t*)rxBlockData;
-  dd[0] = 0x12;
-  dd[1] = 0x12;
-  dd[2] = 0x12;
-  dd[3] = 0x12;
-  dd[4] = 0x12;
-  dd[5] = 0x12;
+  dd[0] = 0xff;
+  dd[1] = 0xff;
+  dd[2] = 0xff;
+  dd[3] = 0xff;
+  dd[4] = 0xff;
+  dd[5] = 0xff;
   dd[6] = ethAddress.bytes[0];
   dd[7] = ethAddress.bytes[1];
   dd[8] = ethAddress.bytes[2];
@@ -297,26 +331,95 @@ bool AzulNX2Ethernet::initControllerChip() {
   dd[10] = ethAddress.bytes[4];
   dd[11] = ethAddress.bytes[5];
   dd[12] = 0x08;
-  dd[13] = 0x00;
+  dd[13] = 0x06;
+  dd[14] = 0x00;
+  dd[15] = 0x01;
+  dd[16] = 0x08;
+  dd[17] = 0x00;
+  dd[18] = 0x06;
+  dd[19] = 0x04;
+  dd[20] = 0x00;
+  dd[21] = 0x01;
+  dd[22] = ethAddress.bytes[0];
+  dd[23] = ethAddress.bytes[1];
+  dd[24] = ethAddress.bytes[2];
+  dd[25] = ethAddress.bytes[3];
+  dd[26] = ethAddress.bytes[4];
+  dd[27] = ethAddress.bytes[5];
+  dd[28] = 0x45;
+  dd[29] = 0x45;
+  dd[30] = 0x45;
+  dd[31] = 0x45;
+  dd[32] = 0x00;
+  dd[33] = 0x00;
+  dd[34] = 0x00;
+  dd[35] = 0x00;
+  dd[36] = 0x00;
+  dd[37] = 0x00;
+  dd[38] = 0xc0;
+  dd[39] = 0xa8;
+  dd[40] = 0x3c;
+  dd[41] = 0x33;
+  dd[42] = 0x41;
+  dd[43] = 0x4E;
+  dd[44] = 0x4E;
+  dd[45] = 0x45;
+  dd[46] = 0x20;
+  dd[47] = 0x42;
+  dd[48] = 0x4F;
+  dd[49] = 0x4F;
+  dd[50] = 0x4E;
+  dd[51] = 0x43;
+  dd[52] = 0x48;
+  dd[53] = 0x55;
+  dd[54] = 0x59;
   
   
   bd->tx_bd_haddr_hi = rxBlockSeg.fIOVMAddr >> 32;
   bd->tx_bd_haddr_lo = rxBlockSeg.fIOVMAddr & 0xFFFFFFFF;
-  bd->tx_bd_mss_nbytes = 48;
+  SYSLOG("BD data is %X, stats data is %X", rxBlockSeg.fIOVMAddr, statsBlockSeg.fIOVMAddr);
+  bd->tx_bd_mss_nbytes = 56;
   bd->tx_bd_flags = TX_BD_FLAGS_START | TX_BD_FLAGS_END;
   
   writeReg16(MB_GET_CID_ADDR(TX_CID) +
              NX2_L2MQ_TX_HOST_BIDX, 1);
   writeReg32(MB_GET_CID_ADDR(TX_CID) +
-             NX2_L2MQ_TX_HOST_BSEQ, 48);
+             NX2_L2MQ_TX_HOST_BSEQ, 56);
+  
+  //writeContext32(MB_GET_CID_ADDR(TX_CID), NX2_L2MQ_TX_HOST_BIDX, 1);
+  //writeContext32(MB_GET_CID_ADDR(TX_CID), NX2_L2MQ_TX_HOST_BSEQ, 48);
+  
+  
+ // SYSLOG("%X TX", readReg32(MB_GET_CID_ADDR(TX_CID) +
+   //         NX2_L2MQ_TX_HOST_BSEQ));
+  
+  SYSLOG("CTX %X %X %X", readContext32(GET_CID_ADDR(TX_CID), NX2_L2CTX_TX_TYPE_XI), readContext32(GET_CID_ADDR(TX_CID), NX2_L2CTX_TX_HOST_BIDX_XI), readContext32(GET_CID_ADDR(TX_CID), NX2_L2CTX_TX_HOST_BSEQ_XI));
   
   IOSleep(1000);
   
   UInt32 *stats = (UInt32*)statsBlockData;
   UInt32 *status = (UInt32*)stsBlockData;
+
   
   IOLog("TX %X %X %X %X %X\n", stats[0x10], stats[0x14], stats[0x18], stats[0x1c], stats[0x50]);
-  IOLog("STS %X %X\n", status[0], status[3]);
+  IOLog("STS %X %X HCS %X\n", status[0], status[3], readReg32(NX2_HC_STATUS));
+  
+  IOLog("TX STS %X\n", stsBlock->status_tx_quick_consumer_index0);
+  IOLog("RX STS %X\n", stsBlock->status_rx_quick_consumer_index0);
+  
+  IOLog("PHY ESR %X\n", readPhyReg32(0x11));
+  
+  IOLog("MQ cmd %X sts %X badrd %X\n", readReg32(NX2_MQ_COMMAND), readReg32(NX2_MQ_STATUS), readReg32(NX2_MQ_BAD_RD_ADDR));
+  
+  IOLog("%X %X EMAC OUT OCTETS\n", readReg32(NX2_EMAC_TX_STAT_IFHCOUTOCTETS), readReg32(NX2_EMAC_TX_STAT_IFHCOUTBADOCTETS));
+  
+  DBGLOG("EMAC reg is %X", readReg32(NX2_EMAC_MODE));
+  
+  for (int i = 0; i < 54; i++) {
+    IOLog("%X", stats[i]);
+  }
+  
+ // SYSLOG("TXP %X %X", readReg32(NX2_TXP_CPU_STATE), readReg32(NX2_TXP_CPU_EVENT_MASK));
   
   
   return true;

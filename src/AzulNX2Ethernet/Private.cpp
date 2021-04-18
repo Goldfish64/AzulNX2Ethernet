@@ -95,6 +95,26 @@ UInt32 AzulNX2Ethernet::readShMem32(UInt32 offset) {
   return readRegIndr32(shMemBase + offset);
 }
 
+UInt32 AzulNX2Ethernet::readContext32(UInt32 cid, UInt32 offset) {
+  UInt32 reg = 0;
+  
+  if (isChip5709) {
+    writeReg32(NX2_CTX_CTX_CTRL, (cid + offset) | NX2_CTX_CTX_CTRL_READ_REQ);
+    
+    for (int i = 0; i < 100; i++) {
+      reg = readReg32(NX2_CTX_CTX_CTRL);
+     // IOLog("Context write %X\n", reg);
+      if ((reg & NX2_CTX_CTX_CTRL_READ_REQ) == 0) {
+       // IOLog("Context write done!\n");
+        return readReg32(NX2_CTX_CTX_DATA);
+      }
+      IODelay(5);
+    }
+  }
+  
+  return 0;
+}
+
 void AzulNX2Ethernet::writeReg16(UInt32 offset, UInt16 value) {
   OSWriteLittleInt16(baseAddr, offset, value);
 }
@@ -123,10 +143,11 @@ void AzulNX2Ethernet::writeShMem32(UInt32 offset, UInt32 value) {
 
 void AzulNX2Ethernet::writeContext32(UInt32 cid, UInt32 offset, UInt32 value) {
   UInt32 reg = 0;
+  DBGLOG("Context write (cid = 0x%X, offset = 0x%X, value = 0x%X)", cid, offset, value);
   
   if (isChip5709) {
     writeReg32(NX2_CTX_CTX_DATA, value);
-    writeReg32(NX2_CTX_CTX_CTRL, offset | NX2_CTX_CTX_CTRL_WRITE_REQ);
+    writeReg32(NX2_CTX_CTX_CTRL, (cid + offset) | NX2_CTX_CTX_CTRL_WRITE_REQ);
     
     for (int i = 0; i < 100; i++) {
       reg = readReg32(NX2_CTX_CTX_CTRL);
@@ -217,6 +238,8 @@ bool AzulNX2Ethernet::allocMemory() {
   
   statsBlockCmd = IODMACommand::withSpecification(kIODMACommandOutputHost64, 64, 0, IODMACommand::kMapped, 0, 1);
   statsBlockCmd->setMemoryDescriptor(statsBlockDesc);
+  offset = 0;
+  numSegs = 1;
   statsBlockCmd->gen64IOVMSegments(&offset, &statsBlockSeg, &numSegs);
   
   memset(statsBlockData, 0, 0x1000);
@@ -236,7 +259,11 @@ bool AzulNX2Ethernet::allocMemory() {
     
     ctxBlockCmd = IODMACommand::withSpecification(kIODMACommandOutputHost64, 64, 0, IODMACommand::kMapped, 0, 1);
     ctxBlockCmd->setMemoryDescriptor(ctxBlockDesc);
+    
+    offset = 0;
+    numSegs = 1;
     ctxBlockCmd->gen64IOVMSegments(&offset, &ctxBlockSeg, &numSegs);
+    DBGLOG("CTX will be mapped to 0x%llX\n", ctxBlockSeg.fIOVMAddr);
     
     memset(ctxBlockData, 0, CTX_PAGE_SIZE * CTX_PAGE_CNT);
   }
@@ -244,16 +271,23 @@ bool AzulNX2Ethernet::allocMemory() {
   //
   // Allocate memory for TX block.
   //
-  txBlockDesc = IOBufferMemoryDescriptor::inTaskWithPhysicalMask(kernel_task,
-                                                                  kIODirectionInOut | kIOMemoryPhysicallyContiguous | kIOMapInhibitCache,
-                                                                  0x1000, // TODO
-                                                                  0xFFFFFFFFFFFFF000ULL);
+  //txBlockDesc = IOBufferMemoryDescriptor::inTaskWithPhysicalMask(kernel_task,
+      //                                                            kIODirectionInOut | kIOMemoryPhysicallyContiguous | kIOMapInhibitCache,
+      //                                                            0x1000, // TODO
+       //                                                           0xFFFFFFFFFFFFF000ULL);
+  
+  txBlockDesc = IOBufferMemoryDescriptor::withOptions(kIODirectionInOut, 0x1000);
+  txBlockDesc->retain();
   txBlockDesc->prepare();
   txBlockData = txBlockDesc->getBytesNoCopy();
   
   txBlockCmd = IODMACommand::withSpecification(kIODMACommandOutputHost64, 64, 0, IODMACommand::kMapped, 0, 1);
   txBlockCmd->setMemoryDescriptor(txBlockDesc);
+  offset = 0;
+  numSegs = 1;
   txBlockCmd->gen64IOVMSegments(&offset, &txBlockSeg, &numSegs);
+  
+  DBGLOG("TX will be mapped to 0x%llX\n", txBlockSeg.fIOVMAddr);
   
   memset(txBlockData, 0, 0x1000);
   
@@ -269,7 +303,10 @@ bool AzulNX2Ethernet::allocMemory() {
   
   rxBlockCmd = IODMACommand::withSpecification(kIODMACommandOutputHost64, 64, 0, IODMACommand::kMapped, 0, 1);
   rxBlockCmd->setMemoryDescriptor(rxBlockDesc);
+  offset = 0;
+  numSegs = 1;
   rxBlockCmd->gen64IOVMSegments(&offset, &rxBlockSeg, &numSegs);
+  DBGLOG("RX will be mapped to 0x%llX\n", rxBlockSeg.fIOVMAddr);
   
   memset(rxBlockData, 0, 0x1000);
   
@@ -590,6 +627,8 @@ void AzulNX2Ethernet::initCpuTxp() {
   loadCpuFirmware(&txpCpuReg, &mipsFirmware->txp);
   startCpu(&txpCpuReg);
   IOLog("AzulNX2Ethernet: Started TX processor\n");
+  
+  SYSLOG("TXP PC %X", readRegIndr32(NX2_TXP_CPU_PROGRAM_COUNTER));
 }
 
 void AzulNX2Ethernet::initCpuTpat() {

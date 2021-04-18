@@ -98,7 +98,7 @@ bool AzulNX2Ethernet::start(IOService *provider) {
   createMediumDictionary();
 
   
-  enableInterrupts(true);
+  //enableInterrupts(true);
  // setLinkStatus(kIONetworkLinkValid);
   
   return result;
@@ -137,6 +137,8 @@ void AzulNX2Ethernet::interruptOccurred(IOInterruptEventSource *source, int coun
  // IOLog("INT status %X ack %X, %X time %X IDX %X\n", hcsMem32[0], hcsMem32[1], hcsMem32[8], (((uint8_t*)stsBlockData)[0x34]), hcsMem32[13]);
   
   SYSLOG("INT status %X (%X) index %u", sts->attnBits, sts->attnBitsAck, sts->index);
+  //SYSLOG("TXP PC %X", readRegIndr32(NX2_TXP_CPU_PROGRAM_COUNTER));
+  //SYSLOG("TXP %X %X", readReg32(NX2_TXP_CPU_STATE), readReg32(NX2_TXP_CPU_EVENT_MASK));
   
   if ((sts->attnBits & STATUS_ATTN_BITS_LINK_STATE) != (sts->attnBitsAck & STATUS_ATTN_BITS_LINK_STATE)) {
     handlePHYInterrupt(sts);

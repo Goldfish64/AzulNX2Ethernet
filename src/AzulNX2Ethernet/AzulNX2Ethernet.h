@@ -85,7 +85,7 @@ private:
   UInt32 readReg32(UInt32 offset);
   UInt32 readRegIndr32(UInt32 offset);
   UInt32 readShMem32(UInt32 offset);
-  UInt32 readContext32(UInt32 offset);
+  UInt32 readContext32(UInt32 cid, UInt32 offset);
   
   void writeReg16(UInt32 offset, UInt16 value);
   void writeReg32(UInt32 offset, UInt32 value);

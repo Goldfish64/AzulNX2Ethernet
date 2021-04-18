@@ -5158,6 +5158,17 @@ struct tx_bd {
   UInt16 tx_bd_vlan_tag;
 };
 
+struct rx_bd {
+  UInt32 rx_bd_haddr_hi;
+  UInt32 rx_bd_haddr_lo;
+  UInt32 rx_bd_len;
+  UInt32 rx_bd_flags;
+#define RX_BD_FLAGS_NOPUSH    (1<<0)
+#define RX_BD_FLAGS_DUMMY    (1<<1)
+#define RX_BD_FLAGS_END    (1<<2)
+#define RX_BD_FLAGS_START    (1<<3)
+};
+
 /*
  *  status_block definition
  */
