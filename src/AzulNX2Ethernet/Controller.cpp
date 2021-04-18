@@ -257,7 +257,7 @@ bool AzulNX2Ethernet::initControllerChip() {
   readReg32(NX2_MISC_ENABLE_SET_BITS);
   IODelay(20);
   
-  enableInterrupts(true);
+  //enableInterrupts(true);
   
   
   

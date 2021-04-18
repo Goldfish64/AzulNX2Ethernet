@@ -27,6 +27,7 @@
 		41E932FB2626650F00AAD2D2 /* Firmware.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Firmware.h; sourceTree = "<group>"; };
 		41E932FD26267F9C00AAD2D2 /* FirmwareStructs.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = FirmwareStructs.h; sourceTree = "<group>"; };
 		41E932FF262B60C500AAD2D2 /* PHY.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = PHY.cpp; sourceTree = "<group>"; };
+		41E93303262BA84600AAD2D2 /* PHY.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = PHY.h; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -70,6 +71,7 @@
 				41E932FF262B60C500AAD2D2 /* PHY.cpp */,
 				41E932F32625078000AAD2D2 /* Private.cpp */,
 				41E932F22625066800AAD2D2 /* Registers.h */,
+				41E93303262BA84600AAD2D2 /* PHY.h */,
 			);
 			path = AzulNX2Ethernet;
 			sourceTree = "<group>";

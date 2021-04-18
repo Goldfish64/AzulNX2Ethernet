@@ -36,20 +36,7 @@ bool AzulNX2Ethernet::start(IOService *provider) {
     
     intSource->enable();
     
-    mediumDict = OSDictionary::withCapacity(3);
-    IONetworkMedium *medium = IONetworkMedium::medium(kIOMediumEthernetAuto, 0);
-    IOLog("medium != NULL: %u\n", medium != NULL);
-    bool result = IONetworkMedium::addMedium(mediumDict, medium);
-    IOLog("medium  add good: %u\n", result);
-    medium->release();
-    
-    medium = IONetworkMedium::medium(kIOMediumEthernet1000BaseT | kIOMediumOptionFullDuplex, 1000);
-    IOLog("medium != NULL: %u\n", medium != NULL);
-    result = IONetworkMedium::addMedium(mediumDict, medium);
-    IOLog("medium  add good: %u\n", result);
-    medium->release();
-    
-    publishMediumDictionary(mediumDict);
+
 
     
     started = true;
@@ -101,12 +88,17 @@ bool AzulNX2Ethernet::start(IOService *provider) {
 
   bool result = started;
   
+
+  
   result = attachInterface((IONetworkInterface **)&ethInterface);
   
   SYSLOG("rev %X", NX2_CHIP_ID);
+  
+  probePHY();
+  createMediumDictionary();
 
   
-  //enableInterrupts(true);
+  enableInterrupts(true);
  // setLinkStatus(kIONetworkLinkValid);
   
   return result;
@@ -118,6 +110,14 @@ const OSString* AzulNX2Ethernet::newVendorString() const {
 
 const OSString* AzulNX2Ethernet::newModelString() const {
   return OSString::withCString(getDeviceModel());
+}
+
+IOReturn AzulNX2Ethernet::enable(IONetworkInterface *interface) {
+  DBGLOG("enable()");
+  
+  updatePHYMediaState();
+  
+  return super::enable(interface);
 }
 
 IOReturn AzulNX2Ethernet::getHardwareAddress(IOEthernetAddress *address) {
@@ -139,24 +139,7 @@ void AzulNX2Ethernet::interruptOccurred(IOInterruptEventSource *source, int coun
   SYSLOG("INT status %X (%X) index %u", sts->attnBits, sts->attnBitsAck, sts->index);
   
   if ((sts->attnBits & STATUS_ATTN_BITS_LINK_STATE) != (sts->attnBitsAck & STATUS_ATTN_BITS_LINK_STATE)) {
-    bool newLink = sts->attnBits & STATUS_ATTN_BITS_LINK_STATE;
-    bool oldLink = sts->attnBitsAck & STATUS_ATTN_BITS_LINK_STATE;
-    
-    if (newLink) {
-      writeReg32(NX2_PCICFG_STATUS_BIT_SET_CMD, STATUS_ATTN_BITS_LINK_STATE);
-      setLinkStatus(kIONetworkLinkValid | kIONetworkLinkActive);
-      SYSLOG("Link UP");
-    } else {
-      writeReg32(NX2_PCICFG_STATUS_BIT_CLEAR_CMD, STATUS_ATTN_BITS_LINK_STATE);
-      setLinkStatus(kIONetworkLinkValid);
-      SYSLOG("Link DOWN");
-    }
-    
-    writeReg32(NX2_EMAC_STATUS, NX2_EMAC_STATUS_LINK_CHANGE);
-    
-    
-    writeReg32(NX2_HC_COMMAND, readReg32(NX2_HC_COMMAND) | NX2_HC_COMMAND_COAL_NOW_WO_INT);
-    readReg32(NX2_HC_COMMAND);
+    handlePHYInterrupt(sts);
   }
   
   lastStatusIndex = sts->index;

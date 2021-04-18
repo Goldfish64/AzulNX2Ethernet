@@ -16,6 +16,7 @@
 
 #include "FirmwareStructs.h"
 #include "Registers.h"
+#include "PHY.h"
 
 #define super IOEthernetController
 
@@ -39,12 +40,15 @@ private:
   IOWorkLoop                  *workloop;
   IOInterruptEventSource      *intSource;
   OSDictionary                *mediumDict;
+  UInt32                      currentMediumIndex;
+  phy_media_state_t           mediaState;
   
   IOEthernetInterface         *ethInterface;
   IOEthernetAddress           ethAddress;
   
   bool                        isChip5709;
   UInt32                      shMemBase;
+  UInt16                      phyAddress;
   
   IOBufferMemoryDescriptor    *stsBlockDesc;
   IODMACommand                *stsBlockCmd;
@@ -118,7 +122,14 @@ private:
   //
   // PHY-related
   //
+  UInt32 readPhyReg32(UInt32 offset);
+  void addNetworkMedium(UInt32 index, UInt32 type, UInt32 speed);
+  void createMediumDictionary();
+  bool probePHY();
+  void updatePHYMediaState();
   void fetchMacAddress();
+  void handlePHYInterrupt(status_block_t *stsBlock);
+  
   
   void interruptOccurred(IOInterruptEventSource *source, int count);
   
@@ -140,6 +151,7 @@ public:
   //
   // IOEthernetController methods.
   //
+  virtual IOReturn enable(IONetworkInterface *interface);
   virtual IOReturn getHardwareAddress(IOEthernetAddress *address);
   
   
