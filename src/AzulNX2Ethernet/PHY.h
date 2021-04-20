@@ -80,6 +80,9 @@
 #define PHY_AUX_STATUS_AUTO_NEG_COMPLETE    BIT(15)
 #define PHY_AUX_STATUS_SPEED_MASK           (BIT(8) | BIT(9) | BIT(10))
 
+#define PHY_INTERRUPT_MASK                  0x1B
+#define PHY_INTERRUPT_MASK_LINK_INTS         0xFF00
+
 //
 // Medium types.
 //

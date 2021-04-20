@@ -135,10 +135,14 @@ IOReturn AzulNX2Ethernet::resetPHY() {
   if (IORETURN_ERR(status)) {
     SYSLOG("PHY link did not reset in a timely fashion");
     return kIOReturnTimeout;
-  } else {
-    DBGLOG("PHY has been reset");
   }
-  return status;
+  
+  DBGLOG("PHY has been reset");
+  
+  //
+  // Enable link change interrupts.
+  //
+  return writePhyReg16(PHY_INTERRUPT_MASK, PHY_INTERRUPT_MASK_LINK_INTS);
 }
 
 IOReturn AzulNX2Ethernet::enablePHYLoopback() {
