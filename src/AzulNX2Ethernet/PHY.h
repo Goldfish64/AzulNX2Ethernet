@@ -59,6 +59,16 @@
 #define PHY_1000BASET_STATUS_PARTNER_1000HD     BIT(8)
 #define PHY_1000BASET_STATUS_PARTNER_1000FD     BIT(9)
 
+#define PHY_EXTENDED_CONTROL                        0x10
+#define PHY_EXTENDED_CONTROL_DISABLE_AUTO_MDIX      BIT(14)
+
+#define PHY_AUX_CONTROL_SHADOW                      0x18
+#define PHY_AUX_CONTROL_SHADOW_SELECT_MISC_CONTROL  0x7007
+
+#define PHY_MISC_CONTROL_WIRESPEED_ENABLE           BIT(4)
+#define PHY_MISC_CONTROL_FORCE_AUTO_MDIX            BIT(9)
+#define PHY_MISC_CONTROL_WRITE_ENABLE               BIT(15)
+
 #define PHY_AUX_STATUS                      0x19
 #define PHY_AUX_STATUS_LINK_UP              BIT(2)
 #define PHY_AUX_STATUS_SPEED_10HD           BIT(8)

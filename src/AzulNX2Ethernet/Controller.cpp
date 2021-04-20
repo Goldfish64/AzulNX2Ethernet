@@ -207,9 +207,6 @@ bool AzulNX2Ethernet::initControllerChip() {
   initCpus();
   
   writeReg32(NX2_EMAC_ATTENTION_ENA, NX2_EMAC_ATTENTION_ENA_LINK);
-   
-  DBGLOG("EMAC reg is %X", readReg32(NX2_EMAC_MODE));
-  writeReg32(NX2_EMAC_MODE, readReg32(NX2_EMAC_MODE) | NX2_EMAC_MODE_PORT_GMII); //TODO: PHY needs to be configured correctly for traffic to work!!!
   
   
   reg = readReg32(NX2_MQ_CONFIG);
@@ -308,7 +305,18 @@ bool AzulNX2Ethernet::initControllerChip() {
   
   enableInterrupts(true);
   
-  IOSleep(5000);
+  probePHY();
+  
+  resetPHY();
+  enablePHYAutoMDIX();
+  enablePHYLoopback();
+  enablePHYAutoNegotiation();
+  
+  
+  IOSleep(1000);
+  
+  IOSleep(15000);
+  updatePHYMediaState();
 
   
  // memset(bd, 0, 0x10);
@@ -316,6 +324,8 @@ bool AzulNX2Ethernet::initControllerChip() {
   status_block_t *stsBlock = (status_block_t*)stsBlockData;
   IOLog("cleanred\n");
   IOLog("TX STS %X\n", stsBlock->status_tx_quick_consumer_index0);
+  
+  const char bees[] = "According to all known laws of aviation, there is no way a bee should be able to fly. Its wings are too small to get its fat little body off the ground. The bee, of course, flies anyway because bees don't care what humans think is impossible.";
   
   uint8_t *dd = (uint8_t*)rxBlockData;
   dd[0] = 0xff;
@@ -360,7 +370,10 @@ bool AzulNX2Ethernet::initControllerChip() {
   dd[39] = 0xa8;
   dd[40] = 0x3c;
   dd[41] = 0x33;
-  dd[42] = 0x41;
+  
+  memcpy(&dd[42], bees, sizeof (bees));
+  
+  /*dd[42] = 0x41;
   dd[43] = 0x4E;
   dd[44] = 0x4E;
   dd[45] = 0x45;
@@ -372,19 +385,32 @@ bool AzulNX2Ethernet::initControllerChip() {
   dd[51] = 0x43;
   dd[52] = 0x48;
   dd[53] = 0x55;
-  dd[54] = 0x59;
+  dd[54] = 0x59;*/
   
   
   bd->tx_bd_haddr_hi = rxBlockSeg.fIOVMAddr >> 32;
   bd->tx_bd_haddr_lo = rxBlockSeg.fIOVMAddr & 0xFFFFFFFF;
   SYSLOG("BD data is %X, stats data is %X", rxBlockSeg.fIOVMAddr, statsBlockSeg.fIOVMAddr);
-  bd->tx_bd_mss_nbytes = 56;
+  bd->tx_bd_mss_nbytes = 42 + sizeof (bees);
+  bd->tx_bd_flags = TX_BD_FLAGS_START | TX_BD_FLAGS_END;
+  
+  bd++;
+  bd->tx_bd_haddr_hi = rxBlockSeg.fIOVMAddr >> 32;
+  bd->tx_bd_haddr_lo = rxBlockSeg.fIOVMAddr & 0xFFFFFFFF;
+  SYSLOG("BD data is %X, stats data is %X", rxBlockSeg.fIOVMAddr, statsBlockSeg.fIOVMAddr);
+  bd->tx_bd_mss_nbytes = 42 + sizeof (bees);
+  bd->tx_bd_flags = TX_BD_FLAGS_START | TX_BD_FLAGS_END;
+  bd++;
+  bd->tx_bd_haddr_hi = rxBlockSeg.fIOVMAddr >> 32;
+  bd->tx_bd_haddr_lo = rxBlockSeg.fIOVMAddr & 0xFFFFFFFF;
+  SYSLOG("BD data is %X, stats data is %X", rxBlockSeg.fIOVMAddr, statsBlockSeg.fIOVMAddr);
+  bd->tx_bd_mss_nbytes = 42 + sizeof (bees);
   bd->tx_bd_flags = TX_BD_FLAGS_START | TX_BD_FLAGS_END;
   
   writeReg16(MB_GET_CID_ADDR(TX_CID) +
-             NX2_L2MQ_TX_HOST_BIDX, 1);
+             NX2_L2MQ_TX_HOST_BIDX, 3);
   writeReg32(MB_GET_CID_ADDR(TX_CID) +
-             NX2_L2MQ_TX_HOST_BSEQ, 56);
+             NX2_L2MQ_TX_HOST_BSEQ, (42 + sizeof (bees)) * 3);
   
   //writeContext32(MB_GET_CID_ADDR(TX_CID), NX2_L2MQ_TX_HOST_BIDX, 1);
   //writeContext32(MB_GET_CID_ADDR(TX_CID), NX2_L2MQ_TX_HOST_BSEQ, 48);
@@ -407,7 +433,7 @@ bool AzulNX2Ethernet::initControllerChip() {
   IOLog("TX STS %X\n", stsBlock->status_tx_quick_consumer_index0);
   IOLog("RX STS %X\n", stsBlock->status_rx_quick_consumer_index0);
   
-  IOLog("PHY ESR %X\n", readPhyReg32(0x11));
+  //IOLog("PHY ESR %X\n", readPhyReg32(0x11));
   
   IOLog("MQ cmd %X sts %X badrd %X\n", readReg32(NX2_MQ_COMMAND), readReg32(NX2_MQ_STATUS), readReg32(NX2_MQ_BAD_RD_ADDR));
   

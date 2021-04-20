@@ -23,6 +23,8 @@
 #define SYSLOG(str, ...) logPrint(str, ## __VA_ARGS__)
 #define DBGLOG(str, ...) logPrint(str, ## __VA_ARGS__)
 
+#define IORETURN_ERR(a)  (a != kIOReturnSuccess)
+
 class AzulNX2Ethernet : public IOEthernetController {
   OSDeclareDefaultStructors(AzulNX2Ethernet);
   
@@ -122,10 +124,16 @@ private:
   //
   // PHY-related
   //
-  UInt32 readPhyReg32(UInt32 offset);
+  IOReturn readPhyReg16(UInt8 offset, UInt16 *value);
+  IOReturn writePhyReg16(UInt8 offset, UInt16 value);
+  bool probePHY();
+  IOReturn resetPHY();
+  IOReturn enablePHYLoopback();
+  IOReturn enablePHYAutoMDIX();
+  IOReturn enablePHYAutoNegotiation();
+  
   void addNetworkMedium(UInt32 index, UInt32 type, UInt32 speed);
   void createMediumDictionary();
-  bool probePHY();
   void updatePHYMediaState();
   void fetchMacAddress();
   void handlePHYInterrupt(status_block_t *stsBlock);

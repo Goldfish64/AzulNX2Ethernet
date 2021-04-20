@@ -1,8 +1,20 @@
 #include "AzulNX2Ethernet.h"
 
-UInt32 AzulNX2Ethernet::readPhyReg32(UInt32 offset) {
-  UInt32 reg = 0;
+IOReturn AzulNX2Ethernet::readPhyReg16(UInt8 offset, UInt16 *value) {
+  IOReturn status = kIOReturnTimeout;
+  UInt32 reg;
   
+  //
+  // Handle clause 45 PHYs here.
+  //
+  
+  //
+  // Disable auto polling.
+  //
+  
+  //
+  // Read from the specified PHY register.
+  //
   writeReg32(NX2_EMAC_MDIO_COMM,
              NX2_MIPHY(phyAddress) |
              NX2_MIREG(offset) |
@@ -19,12 +31,221 @@ UInt32 AzulNX2Ethernet::readPhyReg32(UInt32 offset) {
       
       reg = readReg32(NX2_EMAC_MDIO_COMM);
       reg &= NX2_EMAC_MDIO_COMM_DATA;
-      return reg;
+      
+      *value = reg & 0xFFFF;
+      status = kIOReturnSuccess;
+      break;
     }
   }
   
-  SYSLOG("PHY timeout while reading register 0x%X!", offset);
-  return UINT32_MAX;
+  //
+  // Re-enable auto polling.
+  //
+  
+  if (IORETURN_ERR(status)) {
+    SYSLOG("PHY timeout while reading register 0x%X!", offset);
+  }
+  return status;
+}
+
+IOReturn AzulNX2Ethernet::writePhyReg16(UInt8 offset, UInt16 value) {
+  IOReturn status = kIOReturnTimeout;
+  UInt32 reg;
+  
+  //
+  // Handle clause 45 PHYs here.
+  //
+  
+  //
+  // Disable auto polling.
+  //
+  
+  //
+  // Write to the specified PHY register.
+  //
+  writeReg32(NX2_EMAC_MDIO_COMM,
+             NX2_MIPHY(phyAddress) |
+             NX2_MIREG(offset) |
+             NX2_EMAC_MDIO_COMM_COMMAND_WRITE |
+             NX2_EMAC_MDIO_COMM_DISEXT |
+             NX2_EMAC_MDIO_COMM_START_BUSY |
+             value);
+  
+  for (int i = 0; i < NX2_PHY_TIMEOUT; i++) {
+    IODelay(10);
+    
+    reg = readReg32(NX2_EMAC_MDIO_COMM);
+    if (!(reg & NX2_EMAC_MDIO_COMM_START_BUSY)) {
+      IODelay(5);
+      status = kIOReturnSuccess;
+      break;
+    }
+  }
+  
+  //
+  // Re-enable auto polling.
+  //
+  
+  if (IORETURN_ERR(status)) {
+    SYSLOG("PHY timeout while writing register 0x%X!", offset);
+  }
+  return status;
+}
+
+bool AzulNX2Ethernet::probePHY() {
+  //
+  // Default PHY address is 1 for copper-based controllers.
+  //
+  phyAddress = 1;
+  
+  //UInt32 oui1 = readPhyReg32(0x02);
+  //UInt32 oui2 = readPhyReg32(0x03);
+  
+ // DBGLOG("0x%X 0%X", oui1, oui2);
+  
+  return true;
+}
+
+IOReturn AzulNX2Ethernet::resetPHY() {
+  IOReturn status;
+  UInt16 reg;
+  
+  //
+  // Write reset bit and wait up to 100ms for PHY to reset.
+  //
+  status = writePhyReg16(PHY_MII_CONTROL, PHY_MII_CONTROL_RESET);
+  if (IORETURN_ERR(status)) {
+    return status;
+  }
+  
+  for (int i = 0; i < 10000; i++) {
+    status = readPhyReg16(PHY_MII_CONTROL, &reg);
+    if (IORETURN_ERR(status)) {
+      return status;
+    }
+    status = kIOReturnTimeout;
+    
+    if ((reg & PHY_MII_CONTROL_RESET) == 0) {
+      status = kIOReturnSuccess;
+      break;
+    }
+    IODelay(10);
+  }
+  
+  if (IORETURN_ERR(status)) {
+    SYSLOG("PHY link did not reset in a timely fashion");
+    return kIOReturnTimeout;
+  } else {
+    DBGLOG("PHY has been reset");
+  }
+  return status;
+}
+
+IOReturn AzulNX2Ethernet::enablePHYLoopback() {
+  IOReturn status;
+  UInt16 reg;
+  
+  status = writePhyReg16(PHY_MII_CONTROL, PHY_MII_CONTROL_LOOPBACK);
+  if (IORETURN_ERR(status)) {
+    return status;
+  }
+  
+  //
+  // Wait for PHY link to come down.
+  //
+  for (int i = 0; i < 1500; i++) {
+    status = readPhyReg16(PHY_MII_STATUS, &reg);
+    if (IORETURN_ERR(status)) {
+      return status;
+    }
+    status = kIOReturnTimeout;
+    
+    if ((reg & PHY_MII_STATUS_LINK_UP) == 0) {
+      status = kIOReturnSuccess;
+      break;
+    }
+    IODelay(10);
+  }
+  
+  if (IORETURN_ERR(status)) {
+    SYSLOG("PHY link did not come down in a timely fashion while enabling loopback mode");
+    return kIOReturnTimeout;
+  } else {
+    DBGLOG("PHY loopback mode is now enabled");
+  }
+  return status;
+}
+
+IOReturn AzulNX2Ethernet::enablePHYAutoMDIX() {
+  IOReturn status;
+  UInt16 reg;
+  
+  //
+  // Get value of misc control shadow register.
+  //
+  status = writePhyReg16(PHY_AUX_CONTROL_SHADOW, PHY_AUX_CONTROL_SHADOW_SELECT_MISC_CONTROL);
+  if (IORETURN_ERR(status)) {
+    return status;
+  }
+  status = readPhyReg16(PHY_AUX_CONTROL_SHADOW, &reg);
+  if (IORETURN_ERR(status)) {
+    return status;
+  }
+  
+  //
+  // Enable Wirespeed, Auto MDIX crossover detection, and writing to the register.
+  //
+  reg |= PHY_MISC_CONTROL_WIRESPEED_ENABLE | PHY_MISC_CONTROL_FORCE_AUTO_MDIX | PHY_MISC_CONTROL_WRITE_ENABLE;
+  status = writePhyReg16(PHY_AUX_CONTROL_SHADOW, reg);
+  if (IORETURN_ERR(status)) {
+    return status;
+  }
+  
+  //
+  // Ensure ADMIX is enabled.
+  //
+  status = readPhyReg16(PHY_EXTENDED_CONTROL, &reg);
+  if (IORETURN_ERR(status)) {
+    return status;
+  }
+  reg &= ~(PHY_EXTENDED_CONTROL_DISABLE_AUTO_MDIX);
+  status = writePhyReg16(PHY_EXTENDED_CONTROL, reg);
+  
+  if (!(IORETURN_ERR(status))) {
+    DBGLOG("PHY auto MDIX crossover is now enabled");
+  }
+  
+  return status;
+}
+
+IOReturn AzulNX2Ethernet::enablePHYAutoNegotiation() {
+  IOReturn status;
+  
+  //
+  // Enable 10Mbps/100Mbps autonegotiation and pause advertisements.
+  // Also enable 1Gbps autonegotiation advertisements.
+  //
+  status = writePhyReg16(PHY_AUTO_NEG_ADVERT,
+                         PHY_AUTO_NEG_ADVERT_802_3 | PHY_AUTO_NEG_ADVERT_10HD | PHY_AUTO_NEG_ADVERT_10FD |
+                         PHY_AUTO_NEG_ADVERT_100HD | PHY_AUTO_NEG_ADVERT_100FD | PHY_AUTO_NEG_ADVERT_PAUSE_CAP | PHY_AUTO_NEG_ADVERT_PAUSE_ASYM);
+  if (IORETURN_ERR(status)) {
+    return status;
+  }
+
+  status = writePhyReg16(PHY_1000BASET_CONTROL, PHY_1000BASET_CONTROL_ADVERT_1000HD | PHY_1000BASET_CONTROL_ADVERT_1000FD);
+  if (IORETURN_ERR(status)) {
+    return status;
+  }
+  
+  //
+  // Force auto negotiation to run.
+  //
+  status = writePhyReg16(PHY_MII_CONTROL, PHY_MII_CONTROL_AUTO_NEG_RESTART | PHY_MII_CONTROL_AUTO_NEG_ENABLE);
+  if (!(IORETURN_ERR(status))) {
+    DBGLOG("PHY auto negotiation has started");
+  }
+  
+  return status;
 }
 
 void AzulNX2Ethernet::addNetworkMedium(UInt32 index, UInt32 type, UInt32 speed) {
@@ -52,28 +273,18 @@ void AzulNX2Ethernet::createMediumDictionary() {
   publishMediumDictionary(mediumDict);
 }
 
-bool AzulNX2Ethernet::probePHY() {
-  //
-  // Default PHY address is 1 for copper-based controllers.
-  //
-  phyAddress = 1;
-  
-  UInt32 oui1 = readPhyReg32(0x02);
-  UInt32 oui2 = readPhyReg32(0x03);
-  
-  DBGLOG("0x%X 0%X", oui1, oui2);
-  
-  return true;
-}
-
 void AzulNX2Ethernet::updatePHYMediaState() {
-  UInt32 speed = readPhyReg32(PHY_AUX_STATUS);
-  if (speed == PHY_FAIL) {
+  UInt16 speed;
+  UInt32 mode  = readReg32(NX2_EMAC_MODE);
+  if (readPhyReg16(PHY_AUX_STATUS, &speed) != kIOReturnSuccess) {
     return;
   }
   
   bool link = speed & PHY_AUX_STATUS_LINK_UP;
   speed    &= PHY_AUX_STATUS_SPEED_MASK;
+  mode     &= ~(NX2_EMAC_MODE_PORT | NX2_EMAC_MODE_HALF_DUPLEX |
+                NX2_EMAC_MODE_MAC_LOOP | NX2_EMAC_MODE_FORCE_LINK |
+                NX2_EMAC_MODE_25G);
   
   switch (speed) {
     case PHY_AUX_STATUS_SPEED_10HD:
@@ -118,6 +329,44 @@ void AzulNX2Ethernet::updatePHYMediaState() {
       break;
   }
   
+  //
+  // PHY link speed is dependent on the link speed.
+  //
+  if (link) {
+    switch (mediaState.speed) {
+      case kLinkSpeed10:
+        if (NX2_CHIP_NUM == NX2_CHIP_NUM_5706) {
+          mode |= NX2_EMAC_MODE_PORT_MII_10;
+          DBGLOG("PHY link speed: MII 10Mb");
+          break;
+        }
+        
+      case kLinkSpeed100:
+        mode |= NX2_EMAC_MODE_PORT_MII;
+        DBGLOG("PHY link speed: MII");
+        break;
+        
+      case kLinkSpeed1000:
+      default:
+        mode |= NX2_EMAC_MODE_PORT_GMII;
+        DBGLOG("PHY link speed: GMII");
+        break;
+    }
+    
+    if (mediaState.duplex == kLinkDuplexHalf) {
+      mode |= NX2_EMAC_MODE_HALF_DUPLEX;
+      DBGLOG("PHY duplex mode: half");
+    } else {
+      DBGLOG("PHY duplex mode: full");
+    }
+  } else {
+    DBGLOG("PHY link speed: none");
+  }
+  
+  //
+  // Update OS with link status.
+  //
+  writeReg32(NX2_EMAC_MODE, mode);
   if (link) {
     setLinkStatus(kIONetworkLinkValid | kIONetworkLinkActive,
                   IONetworkMedium::getMediumWithIndex(mediumDict, currentMediumIndex));
