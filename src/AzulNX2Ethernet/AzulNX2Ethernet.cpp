@@ -137,6 +137,8 @@ UInt32 AzulNX2Ethernet::outputPacket(mbuf_t m, void *param) {
         txCursor->getPhysicalSegmentsWithCoalesce(m,
                                                   segments,
                                                   384);
+  UInt8 *dd = (UInt8*) mbuf_data(m);
+  SYSLOG("Data %X %X %X %X %X %X", dd[0], dd[1], dd[2], dd[3], dd[4], dd[5]);
   
   tx_bd *bd = (tx_bd*)transmitBuffer.buffer;
   bd = &bd[txIndex];
@@ -154,7 +156,10 @@ UInt32 AzulNX2Ethernet::outputPacket(mbuf_t m, void *param) {
         bdFlags |= TX_BD_FLAGS_TCP_UDP_CKSUM;
       }
   
+  bd--;
+  
   for (int i = 0; i < segmentCount; i++) {
+    bd++;
     bd->tx_bd_haddr_hi = segments[i].location >> 32;
     bd->tx_bd_haddr_lo = segments[i].location & 0xFFFFFFFF;
     bd->tx_bd_mss_nbytes = segments[i].length;
@@ -164,7 +169,7 @@ UInt32 AzulNX2Ethernet::outputPacket(mbuf_t m, void *param) {
     txSeq += bd->tx_bd_mss_nbytes;
     
     if (i == 0) {
-      bd->tx_bd_flags = TX_BD_FLAGS_START;
+      bd->tx_bd_flags |= TX_BD_FLAGS_START;
     }
     
   }
