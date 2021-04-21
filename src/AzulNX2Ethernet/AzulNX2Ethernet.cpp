@@ -128,7 +128,7 @@ IOReturn AzulNX2Ethernet::getHardwareAddress(IOEthernetAddress *address) {
 void AzulNX2Ethernet::interruptOccurred(IOInterruptEventSource *source, int count) {
   writeReg32(NX2_PCICFG_INT_ACK_CMD, NX2_PCICFG_INT_ACK_CMD_USE_INT_HC_PARAM | NX2_PCICFG_INT_ACK_CMD_MASK_INT);
   
-  status_block_t *sts = (status_block_t*)stsBlockData;
+  status_block_t *sts = (status_block_t*)statusBuffer.buffer;
   
   
  // UInt32 *hcsMem32 = (UInt32*)stsBlockData;

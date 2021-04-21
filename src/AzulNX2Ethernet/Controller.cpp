@@ -232,11 +232,11 @@ bool AzulNX2Ethernet::initControllerChip() {
   
   fetchMacAddress();
   
-  writeReg32(NX2_HC_STATUS_ADDR_L, (stsBlockSeg.fIOVMAddr & 0xFFFFFFFF));
-  writeReg32(NX2_HC_STATUS_ADDR_H, stsBlockSeg.fIOVMAddr >> 32);
+  writeReg32(NX2_HC_STATUS_ADDR_L, (statusBuffer.physAddr & 0xFFFFFFFF));
+  writeReg32(NX2_HC_STATUS_ADDR_H, statusBuffer.physAddr >> 32);
   
-  writeReg32(NX2_HC_STATISTICS_ADDR_L, (statsBlockSeg.fIOVMAddr & 0xFFFFFFFF));
-  writeReg32(NX2_HC_STATISTICS_ADDR_H, statsBlockSeg.fIOVMAddr >> 32);
+  writeReg32(NX2_HC_STATISTICS_ADDR_L, (statsBuffer.physAddr & 0xFFFFFFFF));
+  writeReg32(NX2_HC_STATISTICS_ADDR_H, statsBuffer.physAddr >> 32);
   
   writeReg32(NX2_HC_TX_TICKS,
         (1 << 16) | 1);
@@ -271,34 +271,34 @@ bool AzulNX2Ethernet::initControllerChip() {
   
   writeReg32(NX2_MQ_MAP_L2_5, readReg32(NX2_MQ_MAP_L2_5) | NX2_MQ_MAP_L2_5_ARM);
   
-  rx_bd *rd = (rx_bd*)rxBlockData;
+  rx_bd *rd = (rx_bd*)receiveBuffer.buffer;
   rx_bd *rd2 = &rd[255];
   
-  reg = rxBlockSeg.fIOVMAddr >> 32;
+  reg = receiveBuffer.physAddr >> 32;
  // writeContext32(GET_CID_ADDR(RX_CID), NX2_L2CTX_RX_NX_BDHADDR_HI, reg);
-  reg = rxBlockSeg.fIOVMAddr & 0xFFFFFFFF;
+  reg = receiveBuffer.physAddr & 0xFFFFFFFF;
   //writeContext32(GET_CID_ADDR(RX_CID), NX2_L2CTX_RX_NX_BDHADDR_LO, reg);
   
-  rd2->rx_bd_haddr_hi = rxBlockSeg.fIOVMAddr >> 32;
-  rd2->rx_bd_haddr_lo = rxBlockSeg.fIOVMAddr & 0xFFFFFFFF;
+  rd2->rx_bd_haddr_hi = receiveBuffer.physAddr >> 32;
+  rd2->rx_bd_haddr_lo = receiveBuffer.physAddr & 0xFFFFFFFF;
   
   //writeReg16(MB_GET_CID_ADDR(RX_CID) + NX2_L2MQ_RX_HOST_BDIDX, <#UInt16 value#>)
   
 
-  tx_bd *bd = (tx_bd*)txBlockData;
+  tx_bd *bd = (tx_bd*)transmitBuffer.buffer;
   tx_bd *bd2 = &bd[255];
   
-  bd2->tx_bd_haddr_hi = txBlockSeg.fIOVMAddr >> 32;
-  bd2->tx_bd_haddr_lo = txBlockSeg.fIOVMAddr & 0xFFFFFFFF;
+  bd2->tx_bd_haddr_hi = transmitBuffer.physAddr >> 32;
+  bd2->tx_bd_haddr_lo = transmitBuffer.physAddr & 0xFFFFFFFF;
   
   reg = NX2_L2CTX_TX_TYPE_TYPE_L2_XI | NX2_L2CTX_TX_TYPE_SIZE_L2_XI;
   writeContext32(GET_CID_ADDR(TX_CID), NX2_L2CTX_TX_TYPE_XI, reg);
   reg = NX2_L2CTX_TX_CMD_TYPE_TYPE_L2_XI | (8 << 16);
   writeContext32(GET_CID_ADDR(TX_CID), NX2_L2CTX_TX_CMD_TYPE_XI, reg);
   
-  reg = txBlockSeg.fIOVMAddr >> 32;
+  reg = transmitBuffer.physAddr >> 32;
   writeContext32(GET_CID_ADDR(TX_CID), NX2_L2CTX_TX_TBDR_BHADDR_HI_XI, reg);
-  reg = txBlockSeg.fIOVMAddr & 0xFFFFFFFF;
+  reg = transmitBuffer.physAddr & 0xFFFFFFFF;
   writeContext32(GET_CID_ADDR(TX_CID), NX2_L2CTX_TX_TBDR_BHADDR_LO_XI, reg);
   
 
@@ -309,25 +309,25 @@ bool AzulNX2Ethernet::initControllerChip() {
   
   resetPHY();
   enablePHYAutoMDIX();
-  enablePHYLoopback();
+ // enablePHYLoopback();
   enablePHYAutoNegotiation();
   
   
-  IOSleep(1000);
+  enableInterrupts(true); // Required after reset due to 10/100 issues?
   
-  IOSleep(15000);
-  updatePHYMediaState();
+  
+  IOSleep(2000);
 
   
  // memset(bd, 0, 0x10);
   
-  status_block_t *stsBlock = (status_block_t*)stsBlockData;
+  status_block_t *stsBlock = (status_block_t*)statusBuffer.buffer;
   IOLog("cleanred\n");
   IOLog("TX STS %X\n", stsBlock->status_tx_quick_consumer_index0);
   
   const char bees[] = "According to all known laws of aviation, there is no way a bee should be able to fly. Its wings are too small to get its fat little body off the ground. The bee, of course, flies anyway because bees don't care what humans think is impossible.";
   
-  uint8_t *dd = (uint8_t*)rxBlockData;
+  uint8_t *dd = (uint8_t*)receiveBuffer.buffer;
   dd[0] = 0xff;
   dd[1] = 0xff;
   dd[2] = 0xff;
@@ -388,22 +388,22 @@ bool AzulNX2Ethernet::initControllerChip() {
   dd[54] = 0x59;*/
   
   
-  bd->tx_bd_haddr_hi = rxBlockSeg.fIOVMAddr >> 32;
-  bd->tx_bd_haddr_lo = rxBlockSeg.fIOVMAddr & 0xFFFFFFFF;
-  SYSLOG("BD data is %X, stats data is %X", rxBlockSeg.fIOVMAddr, statsBlockSeg.fIOVMAddr);
+  bd->tx_bd_haddr_hi = receiveBuffer.physAddr >> 32;
+  bd->tx_bd_haddr_lo = receiveBuffer.physAddr & 0xFFFFFFFF;
+  SYSLOG("BD data is %X, stats data is %X", receiveBuffer.physAddr, statsBuffer.physAddr);
   bd->tx_bd_mss_nbytes = 42 + sizeof (bees);
   bd->tx_bd_flags = TX_BD_FLAGS_START | TX_BD_FLAGS_END;
   
   bd++;
-  bd->tx_bd_haddr_hi = rxBlockSeg.fIOVMAddr >> 32;
-  bd->tx_bd_haddr_lo = rxBlockSeg.fIOVMAddr & 0xFFFFFFFF;
-  SYSLOG("BD data is %X, stats data is %X", rxBlockSeg.fIOVMAddr, statsBlockSeg.fIOVMAddr);
+  bd->tx_bd_haddr_hi = receiveBuffer.physAddr >> 32;
+  bd->tx_bd_haddr_lo = receiveBuffer.physAddr & 0xFFFFFFFF;
+  SYSLOG("BD data is %X, stats data is %X", receiveBuffer.physAddr, statsBuffer.physAddr);
   bd->tx_bd_mss_nbytes = 42 + sizeof (bees);
   bd->tx_bd_flags = TX_BD_FLAGS_START | TX_BD_FLAGS_END;
   bd++;
-  bd->tx_bd_haddr_hi = rxBlockSeg.fIOVMAddr >> 32;
-  bd->tx_bd_haddr_lo = rxBlockSeg.fIOVMAddr & 0xFFFFFFFF;
-  SYSLOG("BD data is %X, stats data is %X", rxBlockSeg.fIOVMAddr, statsBlockSeg.fIOVMAddr);
+  bd->tx_bd_haddr_hi = receiveBuffer.physAddr >> 32;
+  bd->tx_bd_haddr_lo = receiveBuffer.physAddr & 0xFFFFFFFF;
+  SYSLOG("BD data is %X, stats data is %X", receiveBuffer.physAddr, statsBuffer.physAddr);
   bd->tx_bd_mss_nbytes = 42 + sizeof (bees);
   bd->tx_bd_flags = TX_BD_FLAGS_START | TX_BD_FLAGS_END;
   
@@ -423,8 +423,8 @@ bool AzulNX2Ethernet::initControllerChip() {
   
   IOSleep(1000);
   
-  UInt32 *stats = (UInt32*)statsBlockData;
-  UInt32 *status = (UInt32*)stsBlockData;
+  UInt32 *stats = (UInt32*)statsBuffer.buffer;
+  UInt32 *status = (UInt32*)statusBuffer.buffer;
 
   
   IOLog("TX %X %X %X %X %X\n", stats[0x10], stats[0x14], stats[0x18], stats[0x1c], stats[0x50]);
@@ -449,4 +449,8 @@ bool AzulNX2Ethernet::initControllerChip() {
   
   
   return true;
+}
+
+bool AzulNX2Ethernet::initTransmitBuffers() {
+  return 0;
 }

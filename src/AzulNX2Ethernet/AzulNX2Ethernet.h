@@ -25,6 +25,17 @@
 
 #define IORETURN_ERR(a)  (a != kIOReturnSuccess)
 
+#define DMA_BITS_40           ((1ULL << 40) - 1)
+#define DMA_BITS_64           (~0ULL)
+
+typedef struct {
+  IOBufferMemoryDescriptor  *bufDesc;
+  IODMACommand              *dmaCmd;
+  mach_vm_address_t         physAddr;
+  void                      *buffer;
+  size_t                    size;
+} azul_nx2_dma_buf_t;
+
 class AzulNX2Ethernet : public IOEthernetController {
   OSDeclareDefaultStructors(AzulNX2Ethernet);
   
@@ -52,7 +63,13 @@ private:
   UInt32                      shMemBase;
   UInt16                      phyAddress;
   
-  IOBufferMemoryDescriptor    *stsBlockDesc;
+  azul_nx2_dma_buf_t          statusBuffer;
+  azul_nx2_dma_buf_t          statsBuffer;
+  azul_nx2_dma_buf_t          contextBuffer;
+  azul_nx2_dma_buf_t          transmitBuffer;
+  azul_nx2_dma_buf_t          receiveBuffer;
+  
+ /* IOBufferMemoryDescriptor    *stsBlockDesc;
   IODMACommand                *stsBlockCmd;
   IODMACommand::Segment64     stsBlockSeg;
   void                        *stsBlockData;
@@ -71,7 +88,7 @@ private:
   IOBufferMemoryDescriptor    *rxBlockDesc;
   IODMACommand                *rxBlockCmd;
   IODMACommand::Segment64     rxBlockSeg;
-  void                        *rxBlockData;
+  void                        *rxBlockData;*/
   
   
   UInt16                      fwSyncSeq = 0;
@@ -101,6 +118,8 @@ private:
   void enableInterrupts(bool coalNow);
   void disableInterrupts();
   
+  bool allocDmaBuffer(azul_nx2_dma_buf_t *dmaBuf, size_t size, UInt32 alignment);
+  
   bool allocMemory();
   bool firmwareSync(UInt32 msgData);
   bool initContext();
@@ -117,9 +136,13 @@ private:
   void initCpuCom();
   void initCpuCp();
   
+  //
+  // Controller
+  //
   bool prepareController();
   bool resetController(UInt32 resetCode);
   bool initControllerChip();
+  bool initTransmitBuffers();
   
   //
   // PHY-related

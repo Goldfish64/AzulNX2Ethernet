@@ -138,11 +138,8 @@ IOReturn AzulNX2Ethernet::resetPHY() {
   }
   
   DBGLOG("PHY has been reset");
-  
-  //
-  // Enable link change interrupts.
-  //
-  return writePhyReg16(PHY_INTERRUPT_MASK, PHY_INTERRUPT_MASK_LINK_INTS);
+
+  return status;
 }
 
 IOReturn AzulNX2Ethernet::enablePHYLoopback() {
@@ -199,7 +196,7 @@ IOReturn AzulNX2Ethernet::enablePHYAutoMDIX() {
   //
   // Enable Wirespeed, Auto MDIX crossover detection, and writing to the register.
   //
-  reg |= PHY_MISC_CONTROL_WIRESPEED_ENABLE | PHY_MISC_CONTROL_FORCE_AUTO_MDIX | PHY_MISC_CONTROL_WRITE_ENABLE;
+  reg |= PHY_MISC_CONTROL_WIRESPEED_ENABLE | /*PHY_MISC_CONTROL_FORCE_AUTO_MDIX |*/ PHY_MISC_CONTROL_WRITE_ENABLE;
   status = writePhyReg16(PHY_AUX_CONTROL_SHADOW, reg);
   if (IORETURN_ERR(status)) {
     return status;
@@ -208,12 +205,12 @@ IOReturn AzulNX2Ethernet::enablePHYAutoMDIX() {
   //
   // Ensure ADMIX is enabled.
   //
-  status = readPhyReg16(PHY_EXTENDED_CONTROL, &reg);
+ /* status = readPhyReg16(PHY_EXTENDED_CONTROL, &reg);
   if (IORETURN_ERR(status)) {
     return status;
   }
   reg &= ~(PHY_EXTENDED_CONTROL_DISABLE_AUTO_MDIX);
-  status = writePhyReg16(PHY_EXTENDED_CONTROL, reg);
+  status = writePhyReg16(PHY_EXTENDED_CONTROL, reg);*/
   
   if (!(IORETURN_ERR(status))) {
     DBGLOG("PHY auto MDIX crossover is now enabled");
@@ -231,7 +228,7 @@ IOReturn AzulNX2Ethernet::enablePHYAutoNegotiation() {
   //
   status = writePhyReg16(PHY_AUTO_NEG_ADVERT,
                          PHY_AUTO_NEG_ADVERT_802_3 | PHY_AUTO_NEG_ADVERT_10HD | PHY_AUTO_NEG_ADVERT_10FD |
-                         PHY_AUTO_NEG_ADVERT_100HD | PHY_AUTO_NEG_ADVERT_100FD | PHY_AUTO_NEG_ADVERT_PAUSE_CAP | PHY_AUTO_NEG_ADVERT_PAUSE_ASYM);
+                         PHY_AUTO_NEG_ADVERT_100HD | PHY_AUTO_NEG_ADVERT_100FD) ;//| PHY_AUTO_NEG_ADVERT_PAUSE_CAP | PHY_AUTO_NEG_ADVERT_PAUSE_ASYM);
   if (IORETURN_ERR(status)) {
     return status;
   }

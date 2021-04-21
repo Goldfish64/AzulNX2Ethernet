@@ -202,113 +202,70 @@ void AzulNX2Ethernet::disableInterrupts() {
   readReg32(NX2_PCICFG_INT_ACK_CMD);
 }
 
-bool AzulNX2Ethernet::allocMemory() {
-  IODMACommand::Segment64 seg;
-  UInt64 offset = 0;
-  UInt32 numSegs = 1;
+bool AzulNX2Ethernet::allocDmaBuffer(azul_nx2_dma_buf_t *dmaBuf, size_t size, UInt32 alignment) {
+  IOBufferMemoryDescriptor  *bufDesc;
+  IODMACommand              *dmaCmd;
+  IODMACommand::Segment64   seg64;
+  UInt64                    offset = 0;
+  UInt32                    numSegs = 1;
   
-  
-  // TODO: 5708 has a max 40-bit DMA capability
-  
-  //
-  // Allocate memory for status block.
-  //
-  stsBlockDesc = IOBufferMemoryDescriptor::inTaskWithPhysicalMask(kernel_task,
-                                                                  kIODirectionInOut | kIOMemoryPhysicallyContiguous | kIOMapInhibitCache,
-                                                                  0x1000, // TODO
-                                                                  0xFFFFFFFFFFFFF000ULL);
-  stsBlockDesc->prepare();
-  stsBlockData = stsBlockDesc->getBytesNoCopy();
-  
-  stsBlockCmd = IODMACommand::withSpecification(kIODMACommandOutputHost64, 64, 0, IODMACommand::kMapped, 0, 1);
-  stsBlockCmd->setMemoryDescriptor(stsBlockDesc);
-  stsBlockCmd->gen64IOVMSegments(&offset, &stsBlockSeg, &numSegs);
-  
-  memset(stsBlockData, 0, 0x1000);
+  mach_vm_address_t         physMask;
+  UInt8                     dmaBits;
   
   //
-  // Allocate memory for stats block.
+  // The BCM5708 cannot use more than 40 bit addresses.
   //
-  statsBlockDesc = IOBufferMemoryDescriptor::inTaskWithPhysicalMask(kernel_task,
-                                                                  kIODirectionInOut | kIOMemoryPhysicallyContiguous | kIOMapInhibitCache,
-                                                                  0x1000, // TODO
-                                                                  0xFFFFFFFFFFFFF000ULL);
-  statsBlockDesc->prepare();
-  statsBlockData = statsBlockDesc->getBytesNoCopy();
-  
-  statsBlockCmd = IODMACommand::withSpecification(kIODMACommandOutputHost64, 64, 0, IODMACommand::kMapped, 0, 1);
-  statsBlockCmd->setMemoryDescriptor(statsBlockDesc);
-  offset = 0;
-  numSegs = 1;
-  statsBlockCmd->gen64IOVMSegments(&offset, &statsBlockSeg, &numSegs);
-  
-  memset(statsBlockData, 0, 0x1000);
+  physMask  = NX2_CHIP_NUM == NX2_CHIP_NUM_5708 ? DMA_BITS_40 : DMA_BITS_64;
+  physMask &= ~(alignment - 1);
+  dmaBits   = NX2_CHIP_NUM == NX2_CHIP_NUM_5708 ? 40 : 64;
   
   //
-  // Allocate memory for context if on a 5709/5716.
+  // Create DMA buffer with required specifications and get physical address.
   //
-  // We'll allocate an 8KB buffer, split into two 4KB pages.
-  //
-  if (isChip5709) {
-    ctxBlockDesc = IOBufferMemoryDescriptor::inTaskWithPhysicalMask(kernel_task,
-                                                                   kIODirectionInOut | kIOMemoryPhysicallyContiguous | kIOMapInhibitCache,
-                                                                   CTX_PAGE_SIZE * CTX_PAGE_CNT,
-                                                                   0xFFFFFFFFFFFFF000ULL);
-    ctxBlockDesc->prepare();
-    ctxBlockData = ctxBlockDesc->getBytesNoCopy();
-    
-    ctxBlockCmd = IODMACommand::withSpecification(kIODMACommandOutputHost64, 64, 0, IODMACommand::kMapped, 0, 1);
-    ctxBlockCmd->setMemoryDescriptor(ctxBlockDesc);
-    
-    offset = 0;
-    numSegs = 1;
-    ctxBlockCmd->gen64IOVMSegments(&offset, &ctxBlockSeg, &numSegs);
-    DBGLOG("CTX will be mapped to 0x%llX\n", ctxBlockSeg.fIOVMAddr);
-    
-    memset(ctxBlockData, 0, CTX_PAGE_SIZE * CTX_PAGE_CNT);
+  bufDesc = IOBufferMemoryDescriptor::inTaskWithPhysicalMask(kernel_task, kIODirectionInOut | kIOMemoryPhysicallyContiguous | kIOMapInhibitCache, size, physMask);
+  if (bufDesc == NULL) {
+    SYSLOG("Failed to allocate DMA buffer memory of %u bytes", size);
+    return false;
   }
   
-  //
-  // Allocate memory for TX block.
-  //
-  //txBlockDesc = IOBufferMemoryDescriptor::inTaskWithPhysicalMask(kernel_task,
-      //                                                            kIODirectionInOut | kIOMemoryPhysicallyContiguous | kIOMapInhibitCache,
-      //                                                            0x1000, // TODO
-       //                                                           0xFFFFFFFFFFFFF000ULL);
+  bufDesc->prepare();
+  dmaCmd = IODMACommand::withSpecification(kIODMACommandOutputHost64, dmaBits, 0, IODMACommand::kMapped, 0, alignment);
+  if (dmaCmd == NULL) {
+    SYSLOG("Failed to allocate IODMACommand object of %u bytes", size);
+    
+    bufDesc->complete();
+    bufDesc->release();
+    return false;
+  }
   
-  txBlockDesc = IOBufferMemoryDescriptor::withOptions(kIODirectionInOut, 0x1000);
-  txBlockDesc->retain();
-  txBlockDesc->prepare();
-  txBlockData = txBlockDesc->getBytesNoCopy();
+  dmaCmd->setMemoryDescriptor(bufDesc);
+  if (dmaCmd->gen64IOVMSegments(&offset, &seg64, &numSegs) != kIOReturnSuccess) {
+    SYSLOG("Failed to generate physical address segment for buffer of %u bytes", size);
+    
+    dmaCmd->release();
+    bufDesc->complete();
+    bufDesc->release();
+    return false;
+  }
   
-  txBlockCmd = IODMACommand::withSpecification(kIODMACommandOutputHost64, 64, 0, IODMACommand::kMapped, 0, 1);
-  txBlockCmd->setMemoryDescriptor(txBlockDesc);
-  offset = 0;
-  numSegs = 1;
-  txBlockCmd->gen64IOVMSegments(&offset, &txBlockSeg, &numSegs);
+  dmaBuf->bufDesc = bufDesc;
+  dmaBuf->dmaCmd = dmaCmd;
+  dmaBuf->physAddr = seg64.fIOVMAddr;
+  dmaBuf->buffer = bufDesc->getBytesNoCopy();
+  dmaBuf->size = size;
   
-  DBGLOG("TX will be mapped to 0x%llX\n", txBlockSeg.fIOVMAddr);
+  memset(dmaBuf->buffer, 0, dmaBuf->size);
+  DBGLOG("Mapped buffer of %u bytes to 0x%llX", dmaBuf->size, dmaBuf->physAddr);
+  return true;
+}
+
+bool AzulNX2Ethernet::allocMemory() {
   
-  memset(txBlockData, 0, 0x1000);
-  
-  //
-  // Allocate memory for RX block.
-  //
-  rxBlockDesc = IOBufferMemoryDescriptor::inTaskWithPhysicalMask(kernel_task,
-                                                                  kIODirectionInOut | kIOMemoryPhysicallyContiguous | kIOMapInhibitCache,
-                                                                  0x1000, // TODO
-                                                                  0xFFFFFFFFFFFFF000ULL);
-  rxBlockDesc->prepare();
-  rxBlockData = rxBlockDesc->getBytesNoCopy();
-  
-  rxBlockCmd = IODMACommand::withSpecification(kIODMACommandOutputHost64, 64, 0, IODMACommand::kMapped, 0, 1);
-  rxBlockCmd->setMemoryDescriptor(rxBlockDesc);
-  offset = 0;
-  numSegs = 1;
-  rxBlockCmd->gen64IOVMSegments(&offset, &rxBlockSeg, &numSegs);
-  DBGLOG("RX will be mapped to 0x%llX\n", rxBlockSeg.fIOVMAddr);
-  
-  memset(rxBlockData, 0, 0x1000);
+  allocDmaBuffer(&statusBuffer, 0x1000, 16);
+  allocDmaBuffer(&statsBuffer, 0x1000, 16);
+  allocDmaBuffer(&contextBuffer, CTX_PAGE_SIZE * CTX_PAGE_CNT, 4096);
+  allocDmaBuffer(&transmitBuffer, 0x1000, 4096);
+  allocDmaBuffer(&receiveBuffer, 0x1000, 4096);
   
   return true;
 }
@@ -384,7 +341,7 @@ bool AzulNX2Ethernet::initContext() {
     //
     // Add host pages to controller context.
     //
-    ctxAddr = ctxBlockSeg.fIOVMAddr;
+    ctxAddr = contextBuffer.physAddr;
     for (UInt32 i = 0; i < CTX_PAGE_CNT; i++) {
       //
       // Populate page.
