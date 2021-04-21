@@ -315,6 +315,14 @@ bool AzulNX2Ethernet::initControllerChip() {
   
   enableInterrupts(true); // Required after reset due to 10/100 issues?
   
+  txIndex = 0;
+  txSeq = 0;
+  
+  txCursor = IOMbufNaturalMemoryCursor::withSpecification(kIOEthernetMaxPacketSize + 4,
+                                                              384);
+  isEnabled = true;
+  return true;
+  
   
   IOSleep(2000);
 

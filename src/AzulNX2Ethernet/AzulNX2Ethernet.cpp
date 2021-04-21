@@ -10,7 +10,7 @@ bool AzulNX2Ethernet::start(IOService *provider) {
   isChip5709 = true; // TMP
   
 
-
+  isEnabled = false;
   
   
   do {
@@ -18,7 +18,7 @@ bool AzulNX2Ethernet::start(IOService *provider) {
       break;
     }
     
-    workloop = IOWorkLoop::workLoop();
+    IOWorkLoop *workloop = IOWorkLoop::workLoop();
 
 
     intSource = IOInterruptEventSource::interruptEventSource(
@@ -104,6 +104,19 @@ bool AzulNX2Ethernet::start(IOService *provider) {
   return result;
 }
 
+IOWorkLoop* AzulNX2Ethernet::getWorkLoop() const {
+  return workLoop;
+}
+
+bool AzulNX2Ethernet::createWorkLoop() {
+  workLoop = IOWorkLoop::workLoop();
+  return workLoop != NULL;
+}
+
+IOOutputQueue* AzulNX2Ethernet::createOutputQueue() {
+  return IOBasicOutputQueue::withTarget(this, 1000);
+}
+
 const OSString* AzulNX2Ethernet::newVendorString() const {
   return OSString::withCString(getDeviceVendor());
 }
@@ -112,12 +125,73 @@ const OSString* AzulNX2Ethernet::newModelString() const {
   return OSString::withCString(getDeviceModel());
 }
 
+UInt32 AzulNX2Ethernet::outputPacket(mbuf_t m, void *param) {
+  
+  if (!isEnabled)
+    return kIOReturnOutputSuccess;
+  
+  IOPhysicalSegment   segments[384];
+    UInt32              segmentCount;
+  
+  segmentCount =
+        txCursor->getPhysicalSegmentsWithCoalesce(m,
+                                                  segments,
+                                                  384);
+  
+  tx_bd *bd = (tx_bd*)transmitBuffer.buffer;
+  bd = &bd[txIndex];
+  
+  UInt32 bdChecksumFlags;
+  UInt16 bdFlags = 0;
+  
+  getChecksumDemand(m, kChecksumFamilyTCPIP, &bdChecksumFlags);
+
+      if (bdChecksumFlags & kChecksumIP) {
+        bdFlags |= TX_BD_FLAGS_IP_CKSUM;
+      }
+
+      if (bdChecksumFlags & (kChecksumTCP | kChecksumUDP)) {
+        bdFlags |= TX_BD_FLAGS_TCP_UDP_CKSUM;
+      }
+  
+  for (int i = 0; i < segmentCount; i++) {
+    bd->tx_bd_haddr_hi = segments[i].location >> 32;
+    bd->tx_bd_haddr_lo = segments[i].location & 0xFFFFFFFF;
+    bd->tx_bd_mss_nbytes = segments[i].length;
+    bd->tx_bd_flags = bdFlags;
+    
+    txIndex++;
+    txSeq += bd->tx_bd_mss_nbytes;
+    
+    if (i == 0) {
+      bd->tx_bd_flags = TX_BD_FLAGS_START;
+    }
+    
+  }
+
+ // bd->tx_bd_mss_nbytes = m->;
+  bd->tx_bd_flags |= TX_BD_FLAGS_END;
+  
+  writeReg16(MB_GET_CID_ADDR(TX_CID) +
+             NX2_L2MQ_TX_HOST_BIDX, txIndex);
+  writeReg32(MB_GET_CID_ADDR(TX_CID) +
+             NX2_L2MQ_TX_HOST_BSEQ, txSeq);
+  
+  SYSLOG("outputPacket() start");
+  return kIOReturnOutputSuccess;
+}
+
 IOReturn AzulNX2Ethernet::enable(IONetworkInterface *interface) {
   DBGLOG("enable()");
   
   updatePHYMediaState();
   
-  return super::enable(interface);
+  IOOutputQueue *transmitQueue = getOutputQueue();
+  transmitQueue->setCapacity(1000);
+  transmitQueue->start();
+  
+ // return super::enable(interface);
+  return kIOReturnSuccess;
 }
 
 IOReturn AzulNX2Ethernet::getHardwareAddress(IOEthernetAddress *address) {

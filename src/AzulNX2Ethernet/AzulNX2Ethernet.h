@@ -43,6 +43,7 @@ private:
   IOPCIDevice                 *pciNub;
   IOMemoryMap                 *baseMemoryMap;
   volatile void               *baseAddr;
+  bool                        isEnabled;
   
   UInt16                      pciVendorId;
   UInt16                      pciDeviceId;
@@ -50,7 +51,7 @@ private:
   UInt16                      pciSubDeviceId;
   UInt32                      chipId;
   
-  IOWorkLoop                  *workloop;
+  IOWorkLoop                  *workLoop;
   IOInterruptEventSource      *intSource;
   OSDictionary                *mediumDict;
   UInt32                      currentMediumIndex;
@@ -68,6 +69,11 @@ private:
   azul_nx2_dma_buf_t          contextBuffer;
   azul_nx2_dma_buf_t          transmitBuffer;
   azul_nx2_dma_buf_t          receiveBuffer;
+  
+  IOMbufNaturalMemoryCursor *txCursor;
+  
+  UInt32                      txIndex;
+  UInt32                      txSeq;
   
  /* IOBufferMemoryDescriptor    *stsBlockDesc;
   IODMACommand                *stsBlockCmd;
@@ -169,11 +175,18 @@ public:
   // IOService methods.
   //
   virtual bool start(IOService *provider);
+  virtual IOWorkLoop *getWorkLoop() const;
   
 
   //
   // IONetworkController methods.
   //
+  virtual bool createWorkLoop();
+  virtual IOOutputQueue *createOutputQueue();
+  
+  virtual UInt32 outputPacket(mbuf_t m, void *param);
+  
+  
   virtual const OSString *newVendorString() const;
   virtual const OSString *newModelString() const;
  // virtual const OSString *newRevisionString() const;
