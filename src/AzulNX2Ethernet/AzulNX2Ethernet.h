@@ -52,7 +52,8 @@ private:
   UInt32                      chipId;
   
   IOWorkLoop                  *workLoop;
-  IOInterruptEventSource      *intSource;
+  IOInterruptEventSource      *interruptSource;
+  IOOutputQueue               *transmitQueue;
   OSDictionary                *mediumDict;
   UInt32                      currentMediumIndex;
   phy_media_state_t           mediaState;
@@ -60,7 +61,6 @@ private:
   IOEthernetInterface         *ethInterface;
   IOEthernetAddress           ethAddress;
   
-  bool                        isChip5709;
   UInt32                      shMemBase;
   UInt16                      phyAddress;
   
@@ -70,31 +70,14 @@ private:
   azul_nx2_dma_buf_t          transmitBuffer;
   azul_nx2_dma_buf_t          receiveBuffer;
   
+  mbuf_t rxPackets[256];
+  
   IOMbufNaturalMemoryCursor *txCursor;
+  IOMbufNaturalMemoryCursor *rxCursor;
   
   UInt32                      txIndex;
   UInt32                      txSeq;
-  
- /* IOBufferMemoryDescriptor    *stsBlockDesc;
-  IODMACommand                *stsBlockCmd;
-  IODMACommand::Segment64     stsBlockSeg;
-  void                        *stsBlockData;
-  IOBufferMemoryDescriptor    *statsBlockDesc;
-  IODMACommand                *statsBlockCmd;
-  IODMACommand::Segment64     statsBlockSeg;
-  void                        *statsBlockData;
-  IOBufferMemoryDescriptor    *ctxBlockDesc;
-  IODMACommand                *ctxBlockCmd;
-  IODMACommand::Segment64     ctxBlockSeg;
-  void                        *ctxBlockData;
-  IOBufferMemoryDescriptor    *txBlockDesc;
-  IODMACommand                *txBlockCmd;
-  IODMACommand::Segment64     txBlockSeg;
-  void                        *txBlockData;
-  IOBufferMemoryDescriptor    *rxBlockDesc;
-  IODMACommand                *rxBlockCmd;
-  IODMACommand::Segment64     rxBlockSeg;
-  void                        *rxBlockData;*/
+
   
   
   UInt16                      fwSyncSeq = 0;
@@ -118,6 +101,8 @@ private:
   void writeShMem32(UInt32 offset, UInt32 value);
   void writeContext32(UInt32 cid, UInt32 offset, UInt32 value);
   
+  bool initEventSources(IOService *provider);
+  
   const char *getDeviceVendor() const;
   const char *getDeviceModel() const;
   
@@ -125,8 +110,8 @@ private:
   void disableInterrupts();
   
   bool allocDmaBuffer(azul_nx2_dma_buf_t *dmaBuf, size_t size, UInt32 alignment);
+  void freeDmaBuffer(azul_nx2_dma_buf_t *dmaBuf);
   
-  bool allocMemory();
   bool firmwareSync(UInt32 msgData);
   bool initContext();
   void initCpus();

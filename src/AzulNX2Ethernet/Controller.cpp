@@ -21,8 +21,10 @@ bool AzulNX2Ethernet::prepareController() {
       return false;
   }
   
-  if (pciNub->getFunctionNumber() > 0)
-    return false;
+
+  
+  pciNub->setBusMasterEnable(true);
+  pciNub->setMemoryEnable(true);
   
   pciVendorId    = readReg16(kIOPCIConfigVendorID);
   pciDeviceId    = readReg16(kIOPCIConfigDeviceID);
@@ -33,6 +35,9 @@ bool AzulNX2Ethernet::prepareController() {
   snprintf(modelName, sizeof (modelName), "%s %s", getDeviceVendor(), getDeviceModel());
   
   SYSLOG("Controller is %s", modelName);
+  
+  if (pciNub->getFunctionNumber() > 0)
+    return false;
 
   setProperty("model", modelName);
   
@@ -59,6 +64,42 @@ bool AzulNX2Ethernet::prepareController() {
   
   DBGLOG("Shared memory is at 0x%08X", shMemBase);
   
+  //
+  // Allocate status, statistics, transmit, and receive buffers.
+  //
+  if (!allocDmaBuffer(&statusBuffer, 0x1000, 16)) {
+    return false;
+  }
+  if (!allocDmaBuffer(&statsBuffer, 0x1000, 16)) {
+    freeDmaBuffer(&statusBuffer);
+    return false;
+  }
+  if (!allocDmaBuffer(&transmitBuffer, 0x1000, 4096)) {
+    freeDmaBuffer(&statusBuffer);
+    freeDmaBuffer(&statsBuffer);
+    return false;
+  }
+  if (!allocDmaBuffer(&receiveBuffer, 0x1000, 4096)) {
+    freeDmaBuffer(&statusBuffer);
+    freeDmaBuffer(&statsBuffer);
+    freeDmaBuffer(&transmitBuffer);
+    return false;
+  }
+  
+  //
+  // 5709 and 5716 do not have on-chip context memory.
+  // It is required to allocate host memory for this purpose.
+  //
+  if (NX2_CHIP_NUM == NX2_CHIP_NUM_5709) {
+    if (!allocDmaBuffer(&contextBuffer, CTX_PAGE_SIZE * CTX_PAGE_CNT, 4096)) {
+      freeDmaBuffer(&statusBuffer);
+      freeDmaBuffer(&statsBuffer);
+      freeDmaBuffer(&transmitBuffer);
+      freeDmaBuffer(&receiveBuffer);
+      return false;
+    }
+  }
+  
   return true;
 }
 
@@ -77,7 +118,7 @@ bool AzulNX2Ethernet::resetController(UInt32 resetCode) {
   readReg32(NX2_MISC_ENABLE_CLR_BITS);
   IODelay(10);
   
-  if (isChip5709) {
+  if (NX2_CHIP_NUM == NX2_CHIP_NUM_5709) {
     reg = readReg32(NX2_MISC_NEW_CORE_CTL);
     reg &= ~NX2_MISC_NEW_CORE_CTL_DMA_ENABLE;
     writeReg32(NX2_MISC_NEW_CORE_CTL, reg);
@@ -100,7 +141,7 @@ bool AzulNX2Ethernet::resetController(UInt32 resetCode) {
     // 5709/5716 requires 500 uS to reset.
     // Others require 30 uS.
     //
-    if (isChip5709) {
+    if (NX2_CHIP_NUM == NX2_CHIP_NUM_5709) {
       writeReg32(NX2_MISC_COMMAND, NX2_MISC_COMMAND_SW_RESET);
       readReg32(NX2_MISC_COMMAND);
       IOSleep(50);
@@ -196,8 +237,6 @@ bool AzulNX2Ethernet::initControllerChip() {
              NX2_MISC_ENABLE_STATUS_BITS_RX_V2P_ENABLE |
              NX2_MISC_ENABLE_STATUS_BITS_CONTEXT_ENABLE);
   
-  allocMemory();
-  
   //
   // Initialize context and start CPUs.
   //
@@ -213,7 +252,7 @@ bool AzulNX2Ethernet::initControllerChip() {
   reg &= ~NX2_MQ_CONFIG_KNL_BYP_BLK_SIZE;
   reg |= NX2_MQ_CONFIG_KNL_BYP_BLK_SIZE_256;
   
-  if (isChip5709) {
+  if (NX2_CHIP_NUM == NX2_CHIP_NUM_5709) {
     reg |= NX2_MQ_CONFIG_BIN_MQ_MODE;
   }
   writeReg32(NX2_MQ_CONFIG, reg);
@@ -230,6 +269,8 @@ bool AzulNX2Ethernet::initControllerChip() {
   reg |= 4 << 24 | 0x40;
   writeReg32(NX2_TBDR_CONFIG, reg);
   
+  writeReg32(NX2_EMAC_RX_MTU_SIZE, 1504);
+  
   fetchMacAddress();
   
   writeReg32(NX2_HC_STATUS_ADDR_L, (statusBuffer.physAddr & 0xFFFFFFFF));
@@ -241,6 +282,9 @@ bool AzulNX2Ethernet::initControllerChip() {
   writeReg32(NX2_HC_TX_TICKS,
         (1 << 16) | 1);
   
+  writeReg32(NX2_HC_RX_TICKS,
+        (1 << 16) | 1);
+  
   writeReg32(NX2_HC_STAT_COLLECT_TICKS, 0xbb8);
   
   writeReg32(NX2_HC_CONFIG, NX2_HC_CONFIG_RX_TMR_MODE | NX2_HC_CONFIG_TX_TMR_MODE |
@@ -249,7 +293,9 @@ bool AzulNX2Ethernet::initControllerChip() {
   writeReg32(NX2_HC_COMMAND, NX2_HC_COMMAND_CLR_STAT_NOW);
   writeReg32(NX2_HC_ATTN_BITS_ENABLE, 0x1);//0xFFFFFFFF);//0x1 | (1<<18));
   
-  if (isChip5709) {
+  writeReg32(NX2_EMAC_RX_MODE, NX2_RPM_SORT_USER0_PROM_EN | NX2_EMAC_RX_MODE_PROMISCUOUS);
+  
+  if (NX2_CHIP_NUM == NX2_CHIP_NUM_5709) {
     reg = readReg32(NX2_MISC_NEW_CORE_CTL);
     reg |= NX2_MISC_NEW_CORE_CTL_DMA_ENABLE;
     writeReg32(NX2_MISC_NEW_CORE_CTL, reg);
@@ -257,32 +303,85 @@ bool AzulNX2Ethernet::initControllerChip() {
   
   firmwareSync(NX2_DRV_MSG_DATA_WAIT2 | NX2_DRV_MSG_CODE_RESET);
   
-  if (isChip5709) {
+  if (NX2_CHIP_NUM == NX2_CHIP_NUM_5709) {
     writeReg32(NX2_MISC_ENABLE_SET_BITS, NX2_MISC_ENABLE_DEFAULT_XI);
   }
   readReg32(NX2_MISC_ENABLE_SET_BITS);
   IODelay(20);
   
-  reg = NX2_L2CTX_RX_CTX_TYPE_CTX_BD_CHN_TYPE_VALUE |
-  NX2_L2CTX_RX_CTX_TYPE_SIZE_L2 |
-  (0x02 << NX2_L2CTX_RX_BD_PRE_READ_SHIFT);
+ // initCpuRxp();
   
- // writeContext32(GET_CID_ADDR(RX_CID), NX2_L2CTX_RX_CTX_TYPE, reg);
+
+  /*
+   * Page count must remain a power of 2 for all
+   * of the math to work correctly.
+   */
+  #define DEFAULT_RX_PAGES    2
+  #define MAX_RX_PAGES      8
+  #define TOTAL_RX_BD_PER_PAGE  (0x1000 / sizeof(struct rx_bd))
+  #define USABLE_RX_BD_PER_PAGE  (TOTAL_RX_BD_PER_PAGE - 1)
+  #define MAX_RX_BD_AVAIL    (MAX_RX_PAGES * TOTAL_RX_BD_PER_PAGE)
+  #define TOTAL_RX_BD_ALLOC    (TOTAL_RX_BD_PER_PAGE * sc->rx_pages)
+  #define USABLE_RX_BD_ALLOC    (USABLE_RX_BD_PER_PAGE * sc->rx_pages)
+  #define MAX_RX_BD_ALLOC    (TOTAL_RX_BD_ALLOC - 1)
+
+  /* Advance to the next rx_bd, skipping any next page pointers. */
+  #define NEXT_RX_BD(x) (((x) & USABLE_RX_BD_PER_PAGE) ==  \
+      (USABLE_RX_BD_PER_PAGE - 1)) ? (x) + 2 : (x) + 1
+
+  #define RX_CHAIN_IDX(x) ((x) & MAX_RX_BD_ALLOC)
   
-  writeReg32(NX2_MQ_MAP_L2_5, readReg32(NX2_MQ_MAP_L2_5) | NX2_MQ_MAP_L2_5_ARM);
   
   rx_bd *rd = (rx_bd*)receiveBuffer.buffer;
   rx_bd *rd2 = &rd[255];
   
+  IOPhysicalSegment    segment;
+  UInt32               count;
+  
+  UInt32 rxBseq;
+  
+  rxCursor = IOMbufNaturalMemoryCursor::withSpecification(kIOEthernetMaxPacketSize +  4,
+                                                          1);
+  
+  UInt32 rxProd = 0;
+  
+  rxBseq = 0;
+  for (int i = 0; i < 255; i++) {
+    rxPackets[i] = allocatePacket(kIOEthernetMaxPacketSize + 4);
+    
+    count = rxCursor->getPhysicalSegmentsWithCoalesce(rxPackets[i], &segment, 1);
+    if (count) {
+      rd->rx_bd_haddr_hi = segment.location >> 32;
+      rd->rx_bd_haddr_lo = segment.location & 0xFFFFFFFF;
+      rd->rx_bd_flags = RX_BD_FLAGS_START | RX_BD_FLAGS_END;
+      rd->rx_bd_len = segment.length;
+      rxBseq += segment.length;
+      rd++;
+      
+      rxProd = NEXT_RX_BD(rxProd);
+      SYSLOG("Added packet %u %u %X %X", i, rxProd, segment.location, segment.length);
+      
+    }
+  }
+  
+  reg = NX2_L2CTX_RX_CTX_TYPE_CTX_BD_CHN_TYPE_VALUE |
+  NX2_L2CTX_RX_CTX_TYPE_SIZE_L2 |
+  (0x02 << NX2_L2CTX_RX_BD_PRE_READ_SHIFT);
+  
+  writeContext32(GET_CID_ADDR(RX_CID), NX2_L2CTX_RX_CTX_TYPE, reg);
+  
+  writeReg32(NX2_MQ_MAP_L2_5, readReg32(NX2_MQ_MAP_L2_5) | NX2_MQ_MAP_L2_5_ARM);
+  
   reg = receiveBuffer.physAddr >> 32;
- // writeContext32(GET_CID_ADDR(RX_CID), NX2_L2CTX_RX_NX_BDHADDR_HI, reg);
+  writeContext32(GET_CID_ADDR(RX_CID), NX2_L2CTX_RX_NX_BDHADDR_HI, reg);
   reg = receiveBuffer.physAddr & 0xFFFFFFFF;
-  //writeContext32(GET_CID_ADDR(RX_CID), NX2_L2CTX_RX_NX_BDHADDR_LO, reg);
+  writeContext32(GET_CID_ADDR(RX_CID), NX2_L2CTX_RX_NX_BDHADDR_LO, reg);
   
   rd2->rx_bd_haddr_hi = receiveBuffer.physAddr >> 32;
   rd2->rx_bd_haddr_lo = receiveBuffer.physAddr & 0xFFFFFFFF;
   
-  //writeReg16(MB_GET_CID_ADDR(RX_CID) + NX2_L2MQ_RX_HOST_BDIDX, <#UInt16 value#>)
+  writeReg16(MB_GET_CID_ADDR(RX_CID) + NX2_L2MQ_RX_HOST_BDIDX, rxProd);
+  writeReg32(MB_GET_CID_ADDR(RX_CID) + NX2_L2MQ_RX_HOST_BSEQ, rxBseq);
   
 
   tx_bd *bd = (tx_bd*)transmitBuffer.buffer;
@@ -324,7 +423,7 @@ bool AzulNX2Ethernet::initControllerChip() {
   return true;
   
   
-  IOSleep(2000);
+ /* IOSleep(2000);
 
   
  // memset(bd, 0, 0x10);
@@ -396,7 +495,7 @@ bool AzulNX2Ethernet::initControllerChip() {
   dd[54] = 0x59;*/
   
   
-  bd->tx_bd_haddr_hi = receiveBuffer.physAddr >> 32;
+ /* bd->tx_bd_haddr_hi = receiveBuffer.physAddr >> 32;
   bd->tx_bd_haddr_lo = receiveBuffer.physAddr & 0xFFFFFFFF;
   SYSLOG("BD data is %X, stats data is %X", receiveBuffer.physAddr, statsBuffer.physAddr);
   bd->tx_bd_mss_nbytes = 42 + sizeof (bees);
@@ -456,7 +555,7 @@ bool AzulNX2Ethernet::initControllerChip() {
  // SYSLOG("TXP %X %X", readReg32(NX2_TXP_CPU_STATE), readReg32(NX2_TXP_CPU_EVENT_MASK));
   
   
-  return true;
+  return true;*/
 }
 
 bool AzulNX2Ethernet::initTransmitBuffers() {

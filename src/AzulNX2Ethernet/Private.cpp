@@ -98,7 +98,7 @@ UInt32 AzulNX2Ethernet::readShMem32(UInt32 offset) {
 UInt32 AzulNX2Ethernet::readContext32(UInt32 cid, UInt32 offset) {
   UInt32 reg = 0;
   
-  if (isChip5709) {
+  if (NX2_CHIP_NUM == NX2_CHIP_NUM_5709) {
     writeReg32(NX2_CTX_CTX_CTRL, (cid + offset) | NX2_CTX_CTX_CTRL_READ_REQ);
     
     for (int i = 0; i < 100; i++) {
@@ -145,7 +145,7 @@ void AzulNX2Ethernet::writeContext32(UInt32 cid, UInt32 offset, UInt32 value) {
   UInt32 reg = 0;
   DBGLOG("Context write (cid = 0x%X, offset = 0x%X, value = 0x%X)", cid, offset, value);
   
-  if (isChip5709) {
+  if (NX2_CHIP_NUM == NX2_CHIP_NUM_5709) {
     writeReg32(NX2_CTX_CTX_DATA, value);
     writeReg32(NX2_CTX_CTX_CTRL, (cid + offset) | NX2_CTX_CTX_CTRL_WRITE_REQ);
     
@@ -159,6 +159,32 @@ void AzulNX2Ethernet::writeContext32(UInt32 cid, UInt32 offset, UInt32 value) {
       IODelay(5);
     }
   }
+}
+
+bool AzulNX2Ethernet::initEventSources(IOService *provider) {
+  IOWorkLoop *mWorkLoop;
+  
+  //
+  // Create output queue.
+  //
+  transmitQueue = getOutputQueue();
+  if (transmitQueue == NULL) {
+    return false;
+  }
+  
+  //
+  // Create event source for interrupts.
+  //
+  mWorkLoop = getWorkLoop();
+  interruptSource = IOInterruptEventSource::interruptEventSource(
+    this, OSMemberFunctionCast(IOInterruptEventAction, this, &AzulNX2Ethernet::interruptOccurred), provider, 1);
+  if (interruptSource == NULL || mWorkLoop->addEventSource(interruptSource) != kIOReturnSuccess) {
+    SYSLOG("Failed to initialize interrupt source");
+    return false;
+  }
+  interruptSource->enable();
+  
+  return true;
 }
 
 const char* AzulNX2Ethernet::getDeviceVendor() const {
@@ -259,15 +285,12 @@ bool AzulNX2Ethernet::allocDmaBuffer(azul_nx2_dma_buf_t *dmaBuf, size_t size, UI
   return true;
 }
 
-bool AzulNX2Ethernet::allocMemory() {
+void AzulNX2Ethernet::freeDmaBuffer(azul_nx2_dma_buf_t *dmaBuf) {
+  dmaBuf->dmaCmd->release();
+  dmaBuf->bufDesc->complete();
+  dmaBuf->bufDesc->release();
   
-  allocDmaBuffer(&statusBuffer, 0x1000, 16);
-  allocDmaBuffer(&statsBuffer, 0x1000, 16);
-  allocDmaBuffer(&contextBuffer, CTX_PAGE_SIZE * CTX_PAGE_CNT, 4096);
-  allocDmaBuffer(&transmitBuffer, 0x1000, 4096);
-  allocDmaBuffer(&receiveBuffer, 0x1000, 4096);
-  
-  return true;
+  memset(dmaBuf, 0, sizeof (*dmaBuf));
 }
 
 bool AzulNX2Ethernet::firmwareSync(UInt32 msgData) {
@@ -317,7 +340,7 @@ bool AzulNX2Ethernet::initContext() {
   //
   // 5709/5716 use host memory for the context. 5706/5708 have onboard memory.
   //
-  if (isChip5709) {
+  if (NX2_CHIP_NUM == NX2_CHIP_NUM_5709) {
     writeReg32(NX2_CTX_COMMAND,
                NX2_CTX_COMMAND_ENABLED |
                NX2_CTX_COMMAND_MEM_INIT |
@@ -408,10 +431,19 @@ UInt32 AzulNX2Ethernet::processRv2pFixup(UInt32 rv2pProc, UInt32 index, UInt32 f
   return rv2pCode;
 }
 
+#define BCE_RV2P_PROC2_MAX_BD_PAGE_LOC  5
+#define BCE_RV2P_PROC2_CHG_MAX_BD_PAGE(value)  {              \
+codePtr[BCE_RV2P_PROC2_MAX_BD_PAGE_LOC] =             \
+    (codePtr[BCE_RV2P_PROC2_MAX_BD_PAGE_LOC] & ~0xFFFF) | (value);  \
+}
+
 void AzulNX2Ethernet::loadRv2pFirmware(UInt32 rv2pProcessor, const nx2_rv2p_fw_file_entry_t *rv2pEntry) {
-  UInt32 length   = OSSwapBigToHostInt32(rv2pEntry->rv2p.length);
+  /*UInt32 length   = OSSwapBigToHostInt32(rv2pEntry->rv2p.length);
   UInt32 offset   = OSSwapBigToHostInt32(rv2pEntry->rv2p.offset);
-  UInt32 *codePtr = (UInt32*) &firmwareRv2p[offset];
+  UInt32 *codePtr = (UInt32*) &firmwareRv2p[offset];*/
+  SYSLOG("RVP here111");
+  UInt32 *codePtr = (UInt32*)(rv2pProcessor == RV2P_PROC1 ? bce_xi_rv2p_proc1 : bce_xi_rv2p_proc2);
+  UInt32 length = (rv2pProcessor == RV2P_PROC1 ? sizeof(bce_xi_rv2p_proc1) : sizeof(bce_xi_rv2p_proc2));
   
   UInt32 cmd, addr, reset;
   UInt32 fixup, code;
@@ -421,10 +453,12 @@ void AzulNX2Ethernet::loadRv2pFirmware(UInt32 rv2pProcessor, const nx2_rv2p_fw_f
     addr  = NX2_RV2P_PROC1_ADDR_CMD;
     reset = NX2_RV2P_COMMAND_PROC1_RESET;
   } else {
+    BCE_RV2P_PROC2_CHG_MAX_BD_PAGE(255);
     cmd   = NX2_RV2P_PROC2_ADDR_CMD_RDWR;
     addr  = NX2_RV2P_PROC2_ADDR_CMD;
     reset = NX2_RV2P_COMMAND_PROC2_RESET;
   }
+  SYSLOG("RVP here");
   
   //
   // Load instructions and fixups into processor.
@@ -438,7 +472,7 @@ void AzulNX2Ethernet::loadRv2pFirmware(UInt32 rv2pProcessor, const nx2_rv2p_fw_f
     writeReg32(addr, (i / 8) | cmd);
   }
   
-  codePtr = (UInt32*) &firmwareRv2p[offset];
+ /* codePtr = (UInt32*) &firmwareRv2p[offset];
   for (UInt32 i = 0; i < sizeof (rv2pEntry->fixups); i++) {
     fixup = OSSwapBigToHostInt32(rv2pEntry->fixups[i]);
     if (fixup && ((fixup * 4) < length)) {
@@ -449,8 +483,10 @@ void AzulNX2Ethernet::loadRv2pFirmware(UInt32 rv2pProcessor, const nx2_rv2p_fw_f
       writeReg32(NX2_RV2P_INSTR_LOW, code);
       
       writeReg32(addr, (fixup / 2) | cmd);
+      
+      DBGLOG("Processing RV2P fixup %X", fixup);
     }
-  }
+  }*/
   
   //
   // Reset processor.

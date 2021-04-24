@@ -5,9 +5,7 @@ OSDefineMetaClassAndStructors (AzulNX2Ethernet, super);
 bool AzulNX2Ethernet::start(IOService *provider) {
   bool started = false;
   
-  IOLog("AzulNX2Ethernet::start\n");
-  
-  isChip5709 = true; // TMP
+  SYSLOG("start()");
   
 
   isEnabled = false;
@@ -17,27 +15,6 @@ bool AzulNX2Ethernet::start(IOService *provider) {
     if (!super::start(provider)) {
       break;
     }
-    
-    IOWorkLoop *workloop = IOWorkLoop::workLoop();
-
-
-    intSource = IOInterruptEventSource::interruptEventSource(
-          this, OSMemberFunctionCast(IOInterruptEventAction, this,
-                                     &AzulNX2Ethernet::interruptOccurred),
-          provider, 1);
-
-      if (!intSource ||
-          (workloop->addEventSource(intSource) != kIOReturnSuccess)) {
-
-        IOLog("Failed to register interrupt source");
-        return false;
-
-      }
-    
-    intSource->enable();
-    
-
-
     
     started = true;
     
@@ -63,6 +40,11 @@ bool AzulNX2Ethernet::start(IOService *provider) {
     }
     baseAddr = (volatile void *) baseMemoryMap->getVirtualAddress();
     
+    if (!initEventSources(provider)) {
+      SYSLOG("Failed to setup event sources!");
+      break;
+    }
+    
     //
     // Reset and configure the NetXtreme II controller.
     //
@@ -77,6 +59,10 @@ bool AzulNX2Ethernet::start(IOService *provider) {
     if (!initControllerChip()) {
       IOLog("AzulNX2Ethernet: Controller initialization failed!\n");
       break;
+    }
+    
+    if (started == false) {
+      return false;
     }
     
     
@@ -138,7 +124,7 @@ UInt32 AzulNX2Ethernet::outputPacket(mbuf_t m, void *param) {
                                                   segments,
                                                   384);
   UInt8 *dd = (UInt8*) mbuf_data(m);
-  SYSLOG("Data %X %X %X %X %X %X", dd[0], dd[1], dd[2], dd[3], dd[4], dd[5]);
+  SYSLOG("Data %X %X %X %X %X %X %X", dd[0], dd[1], dd[2], dd[3], dd[4], dd[5], dd[6]);
   
   tx_bd *bd = (tx_bd*)transmitBuffer.buffer;
   bd = &bd[txIndex];
@@ -156,20 +142,30 @@ UInt32 AzulNX2Ethernet::outputPacket(mbuf_t m, void *param) {
         bdFlags |= TX_BD_FLAGS_TCP_UDP_CKSUM;
       }
   
-  bd--;
+  //bd--;
   
   for (int i = 0; i < segmentCount; i++) {
-    bd++;
+    bd = (tx_bd*)transmitBuffer.buffer;
+    bd = &bd[txIndex];
+    
     bd->tx_bd_haddr_hi = segments[i].location >> 32;
     bd->tx_bd_haddr_lo = segments[i].location & 0xFFFFFFFF;
     bd->tx_bd_mss_nbytes = segments[i].length;
     bd->tx_bd_flags = bdFlags;
     
-    txIndex++;
-    txSeq += bd->tx_bd_mss_nbytes;
+
     
     if (i == 0) {
       bd->tx_bd_flags |= TX_BD_FLAGS_START;
+    }
+    
+    txIndex++;
+    txSeq += bd->tx_bd_mss_nbytes;
+    
+    
+    
+    if (txIndex == 256) {
+      txIndex = 0;
     }
     
   }
@@ -191,7 +187,6 @@ IOReturn AzulNX2Ethernet::enable(IONetworkInterface *interface) {
   
   updatePHYMediaState();
   
-  IOOutputQueue *transmitQueue = getOutputQueue();
   transmitQueue->setCapacity(1000);
   transmitQueue->start();
   
@@ -205,6 +200,10 @@ IOReturn AzulNX2Ethernet::getHardwareAddress(IOEthernetAddress *address) {
 }
 
 void AzulNX2Ethernet::interruptOccurred(IOInterruptEventSource *source, int count) {
+  if (!isEnabled) {
+    return;;
+  }
+  
   writeReg32(NX2_PCICFG_INT_ACK_CMD, NX2_PCICFG_INT_ACK_CMD_USE_INT_HC_PARAM | NX2_PCICFG_INT_ACK_CMD_MASK_INT);
   
   status_block_t *sts = (status_block_t*)statusBuffer.buffer;
@@ -215,9 +214,19 @@ void AzulNX2Ethernet::interruptOccurred(IOInterruptEventSource *source, int coun
   //IOLog("INT\n");
  // IOLog("INT status %X ack %X, %X time %X IDX %X\n", hcsMem32[0], hcsMem32[1], hcsMem32[8], (((uint8_t*)stsBlockData)[0x34]), hcsMem32[13]);
   
-  SYSLOG("INT status %X (%X) index %u", sts->attnBits, sts->attnBitsAck, sts->index);
+  SYSLOG("INT status %X (%X) index %u tx idx %u rx idx %u", sts->attnBits, sts->attnBitsAck, sts->index, sts->status_tx_quick_consumer_index0, sts->status_rx_quick_consumer_index0);
+  
+  SYSLOG("RX EMAC STS %X %X %X", readReg32(NX2_EMAC_RX_STAT_IFHCINBADOCTETS), readReg32(NX2_EMAC_RX_STAT_IFHCINOCTETS), readReg32(NX2_EMAC_RX_STAT_IFHCINBROADCASTPKTS));
+  SYSLOG("TX EMAC STS %X %X", readReg32(NX2_EMAC_TX_STATUS), readReg32(NX2_EMAC_TX_STAT_IFHCOUTOCTETS));
   //SYSLOG("TXP PC %X", readRegIndr32(NX2_TXP_CPU_PROGRAM_COUNTER));
   //SYSLOG("TXP %X %X", readReg32(NX2_TXP_CPU_STATE), readReg32(NX2_TXP_CPU_EVENT_MASK));
+  
+  if (sts->status_rx_quick_consumer_index0 > 0) {
+    UInt8 *dd = (UInt8*) mbuf_data(rxPackets[sts->status_rx_quick_consumer_index0 - 1]);
+    dd += 0x12;
+    SYSLOG("RX d %X %X %X %X %X %X %X", dd[0], dd[1], dd[2], dd[3], dd[4], dd[5], dd[6]);
+  }
+  
   
   if ((sts->attnBits & STATUS_ATTN_BITS_LINK_STATE) != (sts->attnBitsAck & STATUS_ATTN_BITS_LINK_STATE)) {
     handlePHYInterrupt(sts);

@@ -69,9 +69,9 @@
 				41E932FD26267F9C00AAD2D2 /* FirmwareStructs.h */,
 				41D739AB2625050E00CD96B7 /* Info.plist */,
 				41E932FF262B60C500AAD2D2 /* PHY.cpp */,
+				41E93303262BA84600AAD2D2 /* PHY.h */,
 				41E932F32625078000AAD2D2 /* Private.cpp */,
 				41E932F22625066800AAD2D2 /* Registers.h */,
-				41E93303262BA84600AAD2D2 /* PHY.h */,
 			);
 			path = AzulNX2Ethernet;
 			sourceTree = "<group>";
