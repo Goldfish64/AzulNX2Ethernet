@@ -5143,20 +5143,10 @@ struct tx_bd {
   UInt32 tx_bd_haddr_lo;
   UInt32 tx_bd_mss_nbytes;
   UInt16 tx_bd_flags;
-#define TX_BD_FLAGS_CONN_FAULT    (1<<0)
-#define TX_BD_FLAGS_TCP_UDP_CKSUM  (1<<1)
-#define TX_BD_FLAGS_IP_CKSUM    (1<<2)
-#define TX_BD_FLAGS_VLAN_TAG    (1<<3)
-#define TX_BD_FLAGS_COAL_NOW    (1<<4)
-#define TX_BD_FLAGS_DONT_GEN_CRC  (1<<5)
-#define TX_BD_FLAGS_END      (1<<6)
-#define TX_BD_FLAGS_START      (1<<7)
-#define TX_BD_FLAGS_SW_OPTION_WORD  (0x1f<<8)
-#define TX_BD_FLAGS_SW_FLAGS    (1<<13)
-#define TX_BD_FLAGS_SW_SNAP    (1<<14)
-#define TX_BD_FLAGS_SW_LSO      (1<<15)
   UInt16 tx_bd_vlan_tag;
 };
+
+
 
 struct rx_bd {
   UInt32 rx_bd_haddr_hi;

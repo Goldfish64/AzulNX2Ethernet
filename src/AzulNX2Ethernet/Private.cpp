@@ -55,7 +55,7 @@ static const struct nx2_device_type {
     "QLogic", "NetXtreme II BCM5716 Gigabit Ethernet" },
 };
 
-void AzulNX2Ethernet::logPrint(const char *format, ...) {
+void AzulNX2Ethernet::logPrint(const char *func, const char *format, ...) {
   char tmp[1024];
   tmp[0] = '\0';
   va_list va;
@@ -63,7 +63,7 @@ void AzulNX2Ethernet::logPrint(const char *format, ...) {
   vsnprintf(tmp, sizeof (tmp), format, va);
   va_end(va);
   
-  IOLog("AzulNX2Ethernet: %s\n", tmp);
+  IOLog("AzulNX2Ethernet::%s(): %s\n", func, tmp);
 }
 
 /**
@@ -167,8 +167,8 @@ bool AzulNX2Ethernet::initEventSources(IOService *provider) {
   //
   // Create output queue.
   //
-  transmitQueue = getOutputQueue();
-  if (transmitQueue == NULL) {
+  txQueue = getOutputQueue();
+  if (txQueue == NULL) {
     return false;
   }
   
@@ -396,6 +396,8 @@ bool AzulNX2Ethernet::initContext() {
   
   return true;
 }
+
+
 
 void AzulNX2Ethernet::initCpus() {
   

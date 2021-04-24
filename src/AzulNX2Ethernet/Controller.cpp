@@ -67,22 +67,22 @@ bool AzulNX2Ethernet::prepareController() {
   //
   // Allocate status, statistics, transmit, and receive buffers.
   //
-  if (!allocDmaBuffer(&statusBuffer, 0x1000, 16)) {
+  if (!allocDmaBuffer(&statusBuffer, 0x1000, PAGESIZE_16)) {
     return false;
   }
-  if (!allocDmaBuffer(&statsBuffer, 0x1000, 16)) {
+  if (!allocDmaBuffer(&statsBuffer, 0x1000, PAGESIZE_16)) {
     freeDmaBuffer(&statusBuffer);
     return false;
   }
-  if (!allocDmaBuffer(&transmitBuffer, 0x1000, 4096)) {
-    freeDmaBuffer(&statusBuffer);
-    freeDmaBuffer(&statsBuffer);
-    return false;
-  }
-  if (!allocDmaBuffer(&receiveBuffer, 0x1000, 4096)) {
+  if (!allocDmaBuffer(&txBuffer, TX_PAGE_SIZE, PAGESIZE_4K)) {
     freeDmaBuffer(&statusBuffer);
     freeDmaBuffer(&statsBuffer);
-    freeDmaBuffer(&transmitBuffer);
+    return false;
+  }
+  if (!allocDmaBuffer(&receiveBuffer, 0x1000, PAGESIZE_4K)) {
+    freeDmaBuffer(&statusBuffer);
+    freeDmaBuffer(&statsBuffer);
+    freeDmaBuffer(&txBuffer);
     return false;
   }
   
@@ -91,10 +91,10 @@ bool AzulNX2Ethernet::prepareController() {
   // It is required to allocate host memory for this purpose.
   //
   if (NX2_CHIP_NUM == NX2_CHIP_NUM_5709) {
-    if (!allocDmaBuffer(&contextBuffer, CTX_PAGE_SIZE * CTX_PAGE_CNT, 4096)) {
+    if (!allocDmaBuffer(&contextBuffer, CTX_PAGE_SIZE * CTX_PAGE_CNT, PAGESIZE_4K)) {
       freeDmaBuffer(&statusBuffer);
       freeDmaBuffer(&statsBuffer);
-      freeDmaBuffer(&transmitBuffer);
+      freeDmaBuffer(&txBuffer);
       freeDmaBuffer(&receiveBuffer);
       return false;
     }
@@ -264,10 +264,7 @@ bool AzulNX2Ethernet::initControllerChip() {
   reg = 4 << 24;
   writeReg32(NX2_RV2P_CONFIG, reg);
   
-  reg = readReg32(NX2_TBDR_CONFIG);
-  reg &= ~NX2_TBDR_CONFIG_PAGE_SIZE;
-  reg |= 4 << 24 | 0x40;
-  writeReg32(NX2_TBDR_CONFIG, reg);
+  initTxRxRegs();
   
   writeReg32(NX2_EMAC_RX_MTU_SIZE, 1504);
   
@@ -275,12 +272,11 @@ bool AzulNX2Ethernet::initControllerChip() {
   
   writeReg32(NX2_HC_STATUS_ADDR_L, (statusBuffer.physAddr & 0xFFFFFFFF));
   writeReg32(NX2_HC_STATUS_ADDR_H, statusBuffer.physAddr >> 32);
+  statusBlock = (status_block_t*)statusBuffer.buffer;
   
   writeReg32(NX2_HC_STATISTICS_ADDR_L, (statsBuffer.physAddr & 0xFFFFFFFF));
   writeReg32(NX2_HC_STATISTICS_ADDR_H, statsBuffer.physAddr >> 32);
-  
-  writeReg32(NX2_HC_TX_TICKS,
-        (1 << 16) | 1);
+
   
   writeReg32(NX2_HC_RX_TICKS,
         (1 << 16) | 1);
@@ -301,6 +297,8 @@ bool AzulNX2Ethernet::initControllerChip() {
     writeReg32(NX2_MISC_NEW_CORE_CTL, reg);
   }
   
+
+  
   firmwareSync(NX2_DRV_MSG_DATA_WAIT2 | NX2_DRV_MSG_CODE_RESET);
   
   if (NX2_CHIP_NUM == NX2_CHIP_NUM_5709) {
@@ -310,6 +308,8 @@ bool AzulNX2Ethernet::initControllerChip() {
   IODelay(20);
   
  // initCpuRxp();
+  
+  initTxRing();
   
 
   /*
@@ -384,7 +384,9 @@ bool AzulNX2Ethernet::initControllerChip() {
   writeReg32(MB_GET_CID_ADDR(RX_CID) + NX2_L2MQ_RX_HOST_BSEQ, rxBseq);
   
 
-  tx_bd *bd = (tx_bd*)transmitBuffer.buffer;
+  
+
+ /* tx_bd *bd = (tx_bd*)transmitBuffer.buffer;
   tx_bd *bd2 = &bd[255];
   
   bd2->tx_bd_haddr_hi = transmitBuffer.physAddr >> 32;
@@ -398,7 +400,7 @@ bool AzulNX2Ethernet::initControllerChip() {
   reg = transmitBuffer.physAddr >> 32;
   writeContext32(GET_CID_ADDR(TX_CID), NX2_L2CTX_TX_TBDR_BHADDR_HI_XI, reg);
   reg = transmitBuffer.physAddr & 0xFFFFFFFF;
-  writeContext32(GET_CID_ADDR(TX_CID), NX2_L2CTX_TX_TBDR_BHADDR_LO_XI, reg);
+  writeContext32(GET_CID_ADDR(TX_CID), NX2_L2CTX_TX_TBDR_BHADDR_LO_XI, reg);*/
   
 
   
@@ -414,148 +416,13 @@ bool AzulNX2Ethernet::initControllerChip() {
   
   enableInterrupts(true); // Required after reset due to 10/100 issues?
   
-  txIndex = 0;
-  txSeq = 0;
+  //txIndex = 0;
+  //txSeq = 0;
   
   txCursor = IOMbufNaturalMemoryCursor::withSpecification(kIOEthernetMaxPacketSize + 4,
-                                                              384);
+                                                              TX_MAX_SEG_COUNT);
   isEnabled = true;
   return true;
-  
-  
- /* IOSleep(2000);
-
-  
- // memset(bd, 0, 0x10);
-  
-  status_block_t *stsBlock = (status_block_t*)statusBuffer.buffer;
-  IOLog("cleanred\n");
-  IOLog("TX STS %X\n", stsBlock->status_tx_quick_consumer_index0);
-  
-  const char bees[] = "According to all known laws of aviation, there is no way a bee should be able to fly. Its wings are too small to get its fat little body off the ground. The bee, of course, flies anyway because bees don't care what humans think is impossible.";
-  
-  uint8_t *dd = (uint8_t*)receiveBuffer.buffer;
-  dd[0] = 0xff;
-  dd[1] = 0xff;
-  dd[2] = 0xff;
-  dd[3] = 0xff;
-  dd[4] = 0xff;
-  dd[5] = 0xff;
-  dd[6] = ethAddress.bytes[0];
-  dd[7] = ethAddress.bytes[1];
-  dd[8] = ethAddress.bytes[2];
-  dd[9] = ethAddress.bytes[3];
-  dd[10] = ethAddress.bytes[4];
-  dd[11] = ethAddress.bytes[5];
-  dd[12] = 0x08;
-  dd[13] = 0x06;
-  dd[14] = 0x00;
-  dd[15] = 0x01;
-  dd[16] = 0x08;
-  dd[17] = 0x00;
-  dd[18] = 0x06;
-  dd[19] = 0x04;
-  dd[20] = 0x00;
-  dd[21] = 0x01;
-  dd[22] = ethAddress.bytes[0];
-  dd[23] = ethAddress.bytes[1];
-  dd[24] = ethAddress.bytes[2];
-  dd[25] = ethAddress.bytes[3];
-  dd[26] = ethAddress.bytes[4];
-  dd[27] = ethAddress.bytes[5];
-  dd[28] = 0x45;
-  dd[29] = 0x45;
-  dd[30] = 0x45;
-  dd[31] = 0x45;
-  dd[32] = 0x00;
-  dd[33] = 0x00;
-  dd[34] = 0x00;
-  dd[35] = 0x00;
-  dd[36] = 0x00;
-  dd[37] = 0x00;
-  dd[38] = 0xc0;
-  dd[39] = 0xa8;
-  dd[40] = 0x3c;
-  dd[41] = 0x33;
-  
-  memcpy(&dd[42], bees, sizeof (bees));
-  
-  /*dd[42] = 0x41;
-  dd[43] = 0x4E;
-  dd[44] = 0x4E;
-  dd[45] = 0x45;
-  dd[46] = 0x20;
-  dd[47] = 0x42;
-  dd[48] = 0x4F;
-  dd[49] = 0x4F;
-  dd[50] = 0x4E;
-  dd[51] = 0x43;
-  dd[52] = 0x48;
-  dd[53] = 0x55;
-  dd[54] = 0x59;*/
-  
-  
- /* bd->tx_bd_haddr_hi = receiveBuffer.physAddr >> 32;
-  bd->tx_bd_haddr_lo = receiveBuffer.physAddr & 0xFFFFFFFF;
-  SYSLOG("BD data is %X, stats data is %X", receiveBuffer.physAddr, statsBuffer.physAddr);
-  bd->tx_bd_mss_nbytes = 42 + sizeof (bees);
-  bd->tx_bd_flags = TX_BD_FLAGS_START | TX_BD_FLAGS_END;
-  
-  bd++;
-  bd->tx_bd_haddr_hi = receiveBuffer.physAddr >> 32;
-  bd->tx_bd_haddr_lo = receiveBuffer.physAddr & 0xFFFFFFFF;
-  SYSLOG("BD data is %X, stats data is %X", receiveBuffer.physAddr, statsBuffer.physAddr);
-  bd->tx_bd_mss_nbytes = 42 + sizeof (bees);
-  bd->tx_bd_flags = TX_BD_FLAGS_START | TX_BD_FLAGS_END;
-  bd++;
-  bd->tx_bd_haddr_hi = receiveBuffer.physAddr >> 32;
-  bd->tx_bd_haddr_lo = receiveBuffer.physAddr & 0xFFFFFFFF;
-  SYSLOG("BD data is %X, stats data is %X", receiveBuffer.physAddr, statsBuffer.physAddr);
-  bd->tx_bd_mss_nbytes = 42 + sizeof (bees);
-  bd->tx_bd_flags = TX_BD_FLAGS_START | TX_BD_FLAGS_END;
-  
-  writeReg16(MB_GET_CID_ADDR(TX_CID) +
-             NX2_L2MQ_TX_HOST_BIDX, 3);
-  writeReg32(MB_GET_CID_ADDR(TX_CID) +
-             NX2_L2MQ_TX_HOST_BSEQ, (42 + sizeof (bees)) * 3);
-  
-  //writeContext32(MB_GET_CID_ADDR(TX_CID), NX2_L2MQ_TX_HOST_BIDX, 1);
-  //writeContext32(MB_GET_CID_ADDR(TX_CID), NX2_L2MQ_TX_HOST_BSEQ, 48);
-  
-  
- // SYSLOG("%X TX", readReg32(MB_GET_CID_ADDR(TX_CID) +
-   //         NX2_L2MQ_TX_HOST_BSEQ));
-  
-  SYSLOG("CTX %X %X %X", readContext32(GET_CID_ADDR(TX_CID), NX2_L2CTX_TX_TYPE_XI), readContext32(GET_CID_ADDR(TX_CID), NX2_L2CTX_TX_HOST_BIDX_XI), readContext32(GET_CID_ADDR(TX_CID), NX2_L2CTX_TX_HOST_BSEQ_XI));
-  
-  IOSleep(1000);
-  
-  UInt32 *stats = (UInt32*)statsBuffer.buffer;
-  UInt32 *status = (UInt32*)statusBuffer.buffer;
-
-  
-  IOLog("TX %X %X %X %X %X\n", stats[0x10], stats[0x14], stats[0x18], stats[0x1c], stats[0x50]);
-  IOLog("STS %X %X HCS %X\n", status[0], status[3], readReg32(NX2_HC_STATUS));
-  
-  IOLog("TX STS %X\n", stsBlock->status_tx_quick_consumer_index0);
-  IOLog("RX STS %X\n", stsBlock->status_rx_quick_consumer_index0);
-  
-  //IOLog("PHY ESR %X\n", readPhyReg32(0x11));
-  
-  IOLog("MQ cmd %X sts %X badrd %X\n", readReg32(NX2_MQ_COMMAND), readReg32(NX2_MQ_STATUS), readReg32(NX2_MQ_BAD_RD_ADDR));
-  
-  IOLog("%X %X EMAC OUT OCTETS\n", readReg32(NX2_EMAC_TX_STAT_IFHCOUTOCTETS), readReg32(NX2_EMAC_TX_STAT_IFHCOUTBADOCTETS));
-  
-  DBGLOG("EMAC reg is %X", readReg32(NX2_EMAC_MODE));
-  
-  for (int i = 0; i < 54; i++) {
-    IOLog("%X", stats[i]);
-  }
-  
- // SYSLOG("TXP %X %X", readReg32(NX2_TXP_CPU_STATE), readReg32(NX2_TXP_CPU_EVENT_MASK));
-  
-  
-  return true;*/
 }
 
 bool AzulNX2Ethernet::initTransmitBuffers() {

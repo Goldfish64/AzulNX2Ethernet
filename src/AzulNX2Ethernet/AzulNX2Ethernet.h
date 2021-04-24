@@ -17,16 +17,20 @@
 #include "FirmwareStructs.h"
 #include "Registers.h"
 #include "PHY.h"
+#include "HwBuffers.h"
 
 #define super IOEthernetController
 
-#define SYSLOG(str, ...) logPrint(str, ## __VA_ARGS__)
-#define DBGLOG(str, ...) logPrint(str, ## __VA_ARGS__)
+#define SYSLOG(str, ...) logPrint(__FUNCTION__, str, ## __VA_ARGS__)
+#define DBGLOG(str, ...) logPrint(__FUNCTION__, str, ## __VA_ARGS__)
 
 #define IORETURN_ERR(a)  (a != kIOReturnSuccess)
 
 #define DMA_BITS_40           ((1ULL << 40) - 1)
 #define DMA_BITS_64           (~0ULL)
+
+#define ADDR_LO(a)            ((a) & 0xFFFFFFFF)
+#define ADDR_HI(a)            ((a) >> 32)
 
 typedef struct {
   IOBufferMemoryDescriptor  *bufDesc;
@@ -53,7 +57,7 @@ private:
   
   IOWorkLoop                  *workLoop;
   IOInterruptEventSource      *interruptSource;
-  IOOutputQueue               *transmitQueue;
+
   OSDictionary                *mediumDict;
   UInt32                      currentMediumIndex;
   phy_media_state_t           mediaState;
@@ -67,16 +71,25 @@ private:
   azul_nx2_dma_buf_t          statusBuffer;
   azul_nx2_dma_buf_t          statsBuffer;
   azul_nx2_dma_buf_t          contextBuffer;
-  azul_nx2_dma_buf_t          transmitBuffer;
+  azul_nx2_dma_buf_t          txBuffer;
   azul_nx2_dma_buf_t          receiveBuffer;
+  
+  status_block_t              *statusBlock;
   
   mbuf_t rxPackets[256];
   
-  IOMbufNaturalMemoryCursor *txCursor;
+
   IOMbufNaturalMemoryCursor *rxCursor;
+
   
-  UInt32                      txIndex;
-  UInt32                      txSeq;
+  tx_bd_t                     *txChain;
+  UInt16                      txProd;
+  UInt16                      txCons;
+  UInt32                      txProdBufferSize;
+  UInt16                      txFreeDescriptors;
+  mbuf_t                      txPackets[TX_USABLE_BD_COUNT];
+  IOOutputQueue               *txQueue;
+  IOMbufNaturalMemoryCursor   *txCursor;
 
   
   
@@ -87,7 +100,7 @@ private:
   
   UInt16                      lastStatusIndex = 0;
   
-  void logPrint(const char *format, ...);
+  void logPrint(const char *func, const char *format, ...);
   
   UInt16 readReg16(UInt32 offset);
   UInt32 readReg32(UInt32 offset);
@@ -114,7 +127,11 @@ private:
   
   bool firmwareSync(UInt32 msgData);
   bool initContext();
+
+  
   void initCpus();
+  
+
   
   UInt32 processRv2pFixup(UInt32 rv2pProc, UInt32 index, UInt32 fixup, UInt32 rv2pCode);
   void loadRv2pFirmware(UInt32 rv2pProcessor, const nx2_rv2p_fw_file_entry_t *rv2pEntry);
@@ -152,6 +169,16 @@ private:
   void fetchMacAddress();
   void handlePHYInterrupt(status_block_t *stsBlock);
   
+  
+  //
+  // Transmit/receive
+  //
+  void initTxRxRegs();
+  bool initTxRing();
+  void freeTxRing();
+  UInt16 readTxCons();
+  UInt32 sendTxPacket(mbuf_t packet);
+  void handleTxInterrupt(UInt16 txConsIndexNew);
   
   void interruptOccurred(IOInterruptEventSource *source, int count);
   

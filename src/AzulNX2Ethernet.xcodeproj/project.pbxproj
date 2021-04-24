@@ -13,6 +13,7 @@
 		41E932F42625078000AAD2D2 /* Private.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 41E932F32625078000AAD2D2 /* Private.cpp */; };
 		41E932F92625157E00AAD2D2 /* Controller.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 41E932F82625157E00AAD2D2 /* Controller.cpp */; };
 		41E93300262B60C500AAD2D2 /* PHY.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 41E932FF262B60C500AAD2D2 /* PHY.cpp */; };
+		41E9330B2634AB5000AAD2D2 /* TransmitReceive.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 41E9330A2634AB4F00AAD2D2 /* TransmitReceive.cpp */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -28,6 +29,8 @@
 		41E932FD26267F9C00AAD2D2 /* FirmwareStructs.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = FirmwareStructs.h; sourceTree = "<group>"; };
 		41E932FF262B60C500AAD2D2 /* PHY.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = PHY.cpp; sourceTree = "<group>"; };
 		41E93303262BA84600AAD2D2 /* PHY.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = PHY.h; sourceTree = "<group>"; };
+		41E93307263478DA00AAD2D2 /* HwBuffers.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HwBuffers.h; sourceTree = "<group>"; };
+		41E9330A2634AB4F00AAD2D2 /* TransmitReceive.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = TransmitReceive.cpp; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -67,11 +70,13 @@
 				41E932F82625157E00AAD2D2 /* Controller.cpp */,
 				41E932FB2626650F00AAD2D2 /* Firmware.h */,
 				41E932FD26267F9C00AAD2D2 /* FirmwareStructs.h */,
+				41E93307263478DA00AAD2D2 /* HwBuffers.h */,
 				41D739AB2625050E00CD96B7 /* Info.plist */,
 				41E932FF262B60C500AAD2D2 /* PHY.cpp */,
 				41E93303262BA84600AAD2D2 /* PHY.h */,
 				41E932F32625078000AAD2D2 /* Private.cpp */,
 				41E932F22625066800AAD2D2 /* Registers.h */,
+				41E9330A2634AB4F00AAD2D2 /* TransmitReceive.cpp */,
 			);
 			path = AzulNX2Ethernet;
 			sourceTree = "<group>";
@@ -165,6 +170,7 @@
 				41D739AA2625050E00CD96B7 /* AzulNX2Ethernet.cpp in Sources */,
 				41E93300262B60C500AAD2D2 /* PHY.cpp in Sources */,
 				41E932F92625157E00AAD2D2 /* Controller.cpp in Sources */,
+				41E9330B2634AB5000AAD2D2 /* TransmitReceive.cpp in Sources */,
 				41E932F42625078000AAD2D2 /* Private.cpp in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
