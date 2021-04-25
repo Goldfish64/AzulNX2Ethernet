@@ -5126,39 +5126,6 @@
 #define TX_CID      16
 #define RX_CID      0
 
-#define DEFAULT_TX_QUICK_CONS_TRIP_INT  20
-#define DEFAULT_TX_QUICK_CONS_TRIP    20
-#define DEFAULT_TX_TICKS_INT      80
-#define DEFAULT_TX_TICKS        80
-#define DEFAULT_RX_QUICK_CONS_TRIP_INT  6
-#define DEFAULT_RX_QUICK_CONS_TRIP    6
-#define DEFAULT_RX_TICKS_INT      18
-#define DEFAULT_RX_TICKS        18
-
-/*
- *  tx_bd definition
- */
-struct tx_bd {
-  UInt32 tx_bd_haddr_hi;
-  UInt32 tx_bd_haddr_lo;
-  UInt32 tx_bd_mss_nbytes;
-  UInt16 tx_bd_flags;
-  UInt16 tx_bd_vlan_tag;
-};
-
-
-
-struct rx_bd {
-  UInt32 rx_bd_haddr_hi;
-  UInt32 rx_bd_haddr_lo;
-  UInt32 rx_bd_len;
-  UInt32 rx_bd_flags;
-#define RX_BD_FLAGS_NOPUSH    (1<<0)
-#define RX_BD_FLAGS_DUMMY    (1<<1)
-#define RX_BD_FLAGS_END    (1<<2)
-#define RX_BD_FLAGS_START    (1<<3)
-};
-
 /*
  *  status_block definition
  */

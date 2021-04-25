@@ -455,7 +455,7 @@ void AzulNX2Ethernet::loadRv2pFirmware(UInt32 rv2pProcessor, const nx2_rv2p_fw_f
     addr  = NX2_RV2P_PROC1_ADDR_CMD;
     reset = NX2_RV2P_COMMAND_PROC1_RESET;
   } else {
-    BCE_RV2P_PROC2_CHG_MAX_BD_PAGE(255);
+    BCE_RV2P_PROC2_CHG_MAX_BD_PAGE(RX_USABLE_BD_COUNT);
     cmd   = NX2_RV2P_PROC2_ADDR_CMD_RDWR;
     addr  = NX2_RV2P_PROC2_ADDR_CMD;
     reset = NX2_RV2P_COMMAND_PROC2_RESET;

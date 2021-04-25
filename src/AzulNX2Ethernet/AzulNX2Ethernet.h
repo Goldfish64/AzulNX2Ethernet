@@ -72,14 +72,9 @@ private:
   azul_nx2_dma_buf_t          statsBuffer;
   azul_nx2_dma_buf_t          contextBuffer;
   azul_nx2_dma_buf_t          txBuffer;
-  azul_nx2_dma_buf_t          receiveBuffer;
+  azul_nx2_dma_buf_t          rxBuffer;
   
   status_block_t              *statusBlock;
-  
-  mbuf_t rxPackets[256];
-  
-
-  IOMbufNaturalMemoryCursor *rxCursor;
 
   
   tx_bd_t                     *txChain;
@@ -90,6 +85,16 @@ private:
   mbuf_t                      txPackets[TX_USABLE_BD_COUNT];
   IOOutputQueue               *txQueue;
   IOMbufNaturalMemoryCursor   *txCursor;
+  
+  rx_bd_t                     *rxChain;
+  UInt16                      rxProd;
+  UInt16                      rxCons;
+  UInt32                      rxProdBufferSize;
+  UInt16                      rxFreeDescriptors;
+  mbuf_t                      rxPackets[RX_USABLE_BD_COUNT];
+  UInt32                      rxPacketLengths[RX_USABLE_BD_COUNT];
+  IOOutputQueue               *rxQueue;
+  IOMbufNaturalMemoryCursor   *rxCursor;
 
   
   
@@ -180,6 +185,13 @@ private:
   UInt32 sendTxPacket(mbuf_t packet);
   void handleTxInterrupt(UInt16 txConsIndexNew);
   
+  void initRxRegs();
+  bool initRxRing();
+  bool initRxDescriptor(UInt16 index);
+  void freeRxRing();
+  UInt16 readRxCons();
+  void handleRxInterrupt(UInt16 rxConsIndexNew);
+  
   void interruptOccurred(IOInterruptEventSource *source, int count);
   
 public:
@@ -209,6 +221,8 @@ public:
   //
   virtual IOReturn enable(IONetworkInterface *interface);
   virtual IOReturn getHardwareAddress(IOEthernetAddress *address);
+  
+  virtual IOReturn getMaxPacketSize(UInt32 *maxSize) const;
   
   
 };

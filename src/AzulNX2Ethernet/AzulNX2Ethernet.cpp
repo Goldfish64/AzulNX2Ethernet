@@ -149,18 +149,18 @@ void AzulNX2Ethernet::interruptOccurred(IOInterruptEventSource *source, int coun
   //IOLog("INT\n");
  // IOLog("INT status %X ack %X, %X time %X IDX %X\n", hcsMem32[0], hcsMem32[1], hcsMem32[8], (((uint8_t*)stsBlockData)[0x34]), hcsMem32[13]);
   
-  SYSLOG("INT status %X (%X) index %u tx idx %u rx idx %u", statusBlock->attnBits, statusBlock->attnBitsAck, statusBlock->index, readTxCons(), statusBlock->status_rx_quick_consumer_index0);
+ // SYSLOG("INT status %X (%X) index %u tx idx %u rx idx %u", statusBlock->attnBits, statusBlock->attnBitsAck, statusBlock->index, readTxCons(), statusBlock->status_rx_quick_consumer_index0);
   
-  SYSLOG("RX EMAC STS %X %X %X", readReg32(NX2_EMAC_RX_STAT_IFHCINBADOCTETS), readReg32(NX2_EMAC_RX_STAT_IFHCINOCTETS), readReg32(NX2_EMAC_RX_STAT_IFHCINBROADCASTPKTS));
-  SYSLOG("TX EMAC STS %X %X", readReg32(NX2_EMAC_TX_STATUS), readReg32(NX2_EMAC_TX_STAT_IFHCOUTOCTETS));
+ // SYSLOG("RX EMAC STS %X %X %X", readReg32(NX2_EMAC_RX_STAT_IFHCINBADOCTETS), readReg32(NX2_EMAC_RX_STAT_IFHCINOCTETS), readReg32(NX2_EMAC_RX_STAT_IFHCINBROADCASTPKTS));
+ // SYSLOG("TX EMAC STS %X %X", readReg32(NX2_EMAC_TX_STATUS), readReg32(NX2_EMAC_TX_STAT_IFHCOUTOCTETS));
   //SYSLOG("TXP PC %X", readRegIndr32(NX2_TXP_CPU_PROGRAM_COUNTER));
   //SYSLOG("TXP %X %X", readReg32(NX2_TXP_CPU_STATE), readReg32(NX2_TXP_CPU_EVENT_MASK));
   
-  if (statusBlock->status_rx_quick_consumer_index0 > 0) {
+  /*if (statusBlock->status_rx_quick_consumer_index0 > 0) {
     UInt8 *dd = (UInt8*) mbuf_data(rxPackets[statusBlock->status_rx_quick_consumer_index0 - 1]);
     dd += 0x12;
     SYSLOG("RX d %X %X %X %X %X %X %X", dd[0], dd[1], dd[2], dd[3], dd[4], dd[5], dd[6]);
-  }
+  }*/
   
   
   if ((statusBlock->attnBits & STATUS_ATTN_BITS_LINK_STATE) != (statusBlock->attnBitsAck & STATUS_ATTN_BITS_LINK_STATE)) {
@@ -172,6 +172,19 @@ void AzulNX2Ethernet::interruptOccurred(IOInterruptEventSource *source, int coun
     handleTxInterrupt(txConsNew);
   }
   
+  UInt16 rxConsNew = readRxCons();
+  if (rxCons != rxConsNew) {
+    handleRxInterrupt(rxConsNew);
+  }
+  
   lastStatusIndex = statusBlock->index;
   enableInterrupts(false);
 }
+
+IOReturn AzulNX2Ethernet::getMaxPacketSize(UInt32 *maxSize) const
+{
+  *maxSize = MAX_PACKET_SIZE;
+
+  return kIOReturnSuccess;
+}
+
