@@ -100,8 +100,9 @@ private:
   
   UInt16                      fwSyncSeq = 0;
   
-  const UInt8                 *firmwareRv2p;
-  const UInt8                 *firmwareMips;
+
+  const nx2_mips_fw_file_t    *firmwareMips;
+  const nx2_rv2p_fw_file_t    *firmwareRv2p;
   
   UInt16                      lastStatusIndex = 0;
   

@@ -5,9 +5,11 @@
 #define RV2P_PROC1    0
 #define RV2P_PROC2    1
 
-#define RV2P_P1_FIXUP_PAGE_SIZE_IDX    0
-#define RV2P_BD_PAGE_SIZE_MSK      0xffff
-#define RV2P_BD_PAGE_SIZE      ((0x1000 / 16) - 1) // TODO: define 4K page size somewhere
+#define RV2P_P1_FIXUP_PAGE_SIZE_IDX     0
+#define RV2P_BD_PAGE_SIZE_MSK           0xFFFF
+#define RV2P_BD_PAGE_SIZE               ((RX_PAGE_SIZE / 16) - 1)
+
+#define RV2P_FIXUP_COUNT                8
 
 typedef struct {
   UInt32  mode;
@@ -43,7 +45,7 @@ typedef struct {
 
 typedef struct {
   nx2_fw_file_section_t   rv2p;
-  UInt32                  fixups[8];
+  UInt32                  fixups[RV2P_FIXUP_COUNT];
 } nx2_rv2p_fw_file_entry_t;
 
 typedef struct {

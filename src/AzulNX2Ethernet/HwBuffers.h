@@ -29,8 +29,8 @@ typedef struct {
   UInt16 vlanTag;
 } tx_bd_t;
 
-#define TX_PAGE_SIZE                0x4000
 #define TX_PAGE_BITS                14
+#define TX_PAGE_SIZE                BIT(TX_PAGE_BITS)
 #define TX_MAX_BD_COUNT             (TX_PAGE_SIZE / sizeof (tx_bd_t))
 #define TX_USABLE_BD_COUNT          (TX_MAX_BD_COUNT - 1)
 #define TX_MAX_SEG_COUNT            512
@@ -85,8 +85,8 @@ typedef struct {
   UInt16 ipChecksum;
 } rx_l2_header_t;
 
-#define RX_PAGE_SIZE                0x4000
 #define RX_PAGE_BITS                14
+#define RX_PAGE_SIZE                BIT(RX_PAGE_BITS)
 #define RX_MAX_BD_COUNT             (RX_PAGE_SIZE / sizeof (rx_bd_t))
 #define RX_USABLE_BD_COUNT          (RX_MAX_BD_COUNT - 1)
 #define RX_MAX_SEG_COUNT            1

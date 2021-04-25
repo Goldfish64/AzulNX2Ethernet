@@ -1,5 +1,5 @@
 #include "AzulNX2Ethernet.h"
-#include "Firmware.h"
+#include "FirmwareGenerated.h"
 
 //
 // Device mappings.
@@ -400,18 +400,27 @@ bool AzulNX2Ethernet::initContext() {
 
 
 void AzulNX2Ethernet::initCpus() {
-  
-  firmwareRv2p = bnx2_rv2p_09_6_0_17_fw;
-  firmwareMips = bnx2_mips_09_6_2_1b_fw;
-  
-  nx2_rv2p_fw_file_t *rv2pFirmware = (nx2_rv2p_fw_file_t*) firmwareRv2p;
+  //
+  // 5706/5708 and 5709/5716 use different firmware versions.
+  //
+  if (NX2_CHIP_NUM == NX2_CHIP_NUM_5709) {
+    firmwareMips = (nx2_mips_fw_file_t*) bnx2_mips_09_6_2_1b_fw;
+    
+    if (NX2_CHIP_REV == NX2_CHIP_REV_Ax) {
+      firmwareRv2p = (nx2_rv2p_fw_file_t*) bnx2_rv2p_09ax_6_0_17_fw;
+    } else {
+      firmwareRv2p = (nx2_rv2p_fw_file_t*) bnx2_rv2p_09_6_0_17_fw;
+    }
+  } else {
+    firmwareMips = (nx2_mips_fw_file_t*) bnx2_mips_06_6_2_3_fw;
+    firmwareRv2p = (nx2_rv2p_fw_file_t*) bnx2_rv2p_06_6_0_15_fw;
+  }
   
   //
   // Initialize RV2P processors.
   //
-  loadRv2pFirmware(RV2P_PROC1, &rv2pFirmware->proc1);
-  loadRv2pFirmware(RV2P_PROC2, &rv2pFirmware->proc2);
-  IOLog("AzulNX2Ethernet: RV2P firmware loaded\n");
+  loadRv2pFirmware(RV2P_PROC1, &firmwareRv2p->proc1);
+  loadRv2pFirmware(RV2P_PROC2, &firmwareRv2p->proc2);
   
   //
   // Initialize additional processors.
@@ -433,49 +442,40 @@ UInt32 AzulNX2Ethernet::processRv2pFixup(UInt32 rv2pProc, UInt32 index, UInt32 f
   return rv2pCode;
 }
 
-#define BCE_RV2P_PROC2_MAX_BD_PAGE_LOC  5
-#define BCE_RV2P_PROC2_CHG_MAX_BD_PAGE(value)  {              \
-codePtr[BCE_RV2P_PROC2_MAX_BD_PAGE_LOC] =             \
-    (codePtr[BCE_RV2P_PROC2_MAX_BD_PAGE_LOC] & ~0xFFFF) | (value);  \
-}
-
 void AzulNX2Ethernet::loadRv2pFirmware(UInt32 rv2pProcessor, const nx2_rv2p_fw_file_entry_t *rv2pEntry) {
-  /*UInt32 length   = OSSwapBigToHostInt32(rv2pEntry->rv2p.length);
   UInt32 offset   = OSSwapBigToHostInt32(rv2pEntry->rv2p.offset);
-  UInt32 *codePtr = (UInt32*) &firmwareRv2p[offset];*/
-  SYSLOG("RVP here111");
-  UInt32 *codePtr = (UInt32*)(rv2pProcessor == RV2P_PROC1 ? bce_xi_rv2p_proc1 : bce_xi_rv2p_proc2);
-  UInt32 length = (rv2pProcessor == RV2P_PROC1 ? sizeof(bce_xi_rv2p_proc1) : sizeof(bce_xi_rv2p_proc2));
+  UInt32 length   = OSSwapBigToHostInt32(rv2pEntry->rv2p.length);
+  UInt32 *codePtr = (UInt32*) &(((UInt8*)firmwareRv2p)[offset]);
   
   UInt32 cmd, addr, reset;
   UInt32 fixup, code;
+
+  DBGLOG("Loading RV2P processor %u firmware, offset: 0x%X, length: %u bytes", rv2pProcessor + 1, offset, length);
   
   if (rv2pProcessor == RV2P_PROC1) {
     cmd   = NX2_RV2P_PROC1_ADDR_CMD_RDWR;
     addr  = NX2_RV2P_PROC1_ADDR_CMD;
     reset = NX2_RV2P_COMMAND_PROC1_RESET;
   } else {
-    BCE_RV2P_PROC2_CHG_MAX_BD_PAGE(RX_USABLE_BD_COUNT);
     cmd   = NX2_RV2P_PROC2_ADDR_CMD_RDWR;
     addr  = NX2_RV2P_PROC2_ADDR_CMD;
     reset = NX2_RV2P_COMMAND_PROC2_RESET;
   }
-  SYSLOG("RVP here");
   
   //
-  // Load instructions and fixups into processor.
+  // Load instructions into processor.
   //
   for (UInt32 i = 0; i < length; i += 8) {
-    writeReg32(NX2_RV2P_INSTR_HIGH, *codePtr);
+    writeReg32(NX2_RV2P_INSTR_HIGH, OSSwapBigToHostInt32(*codePtr));
     codePtr++;
-    writeReg32(NX2_RV2P_INSTR_LOW, *codePtr);
+    writeReg32(NX2_RV2P_INSTR_LOW, OSSwapBigToHostInt32(*codePtr));
     codePtr++;
     
     writeReg32(addr, (i / 8) | cmd);
   }
   
- /* codePtr = (UInt32*) &firmwareRv2p[offset];
-  for (UInt32 i = 0; i < sizeof (rv2pEntry->fixups); i++) {
+  codePtr = (UInt32*) &(((UInt8*)firmwareRv2p)[offset]);
+  for (UInt32 i = 0; i < RV2P_FIXUP_COUNT; i++) {
     fixup = OSSwapBigToHostInt32(rv2pEntry->fixups[i]);
     if (fixup && ((fixup * 4) < length)) {
       code = OSSwapBigToHostInt32(codePtr[fixup - 1]);
@@ -484,16 +484,16 @@ void AzulNX2Ethernet::loadRv2pFirmware(UInt32 rv2pProcessor, const nx2_rv2p_fw_f
       code = processRv2pFixup(rv2pProcessor, i, fixup, code);
       writeReg32(NX2_RV2P_INSTR_LOW, code);
       
+      DBGLOG("Processing RV2P fixup 0x%X", fixup);
       writeReg32(addr, (fixup / 2) | cmd);
-      
-      DBGLOG("Processing RV2P fixup %X", fixup);
     }
-  }*/
-  
+  }
+
   //
   // Reset processor.
   //
   writeReg32(NX2_RV2P_COMMAND, reset);
+  DBGLOG("RV2P processor %u initialized and started", rv2pProcessor + 1);
 }
 
 void AzulNX2Ethernet::loadCpuFirmware(const cpu_reg_t *cpuReg, const nx2_mips_fw_file_entry_t *mipsEntry) {
@@ -510,7 +510,7 @@ void AzulNX2Ethernet::loadCpuFirmware(const cpu_reg_t *cpuReg, const nx2_mips_fw
   address   = OSSwapBigToHostInt32(mipsEntry->text.address);
   length    = OSSwapBigToHostInt32(mipsEntry->text.length);
   fwOffset  = OSSwapBigToHostInt32(mipsEntry->text.offset);
-  codePtr   = (UInt32*) &firmwareMips[fwOffset];
+  codePtr   = (UInt32*) &(((UInt8*)firmwareMips)[fwOffset]);
   offset    = cpuReg->spadBase + (address - cpuReg->mipsViewBase);
   
   if (length) {
@@ -525,7 +525,7 @@ void AzulNX2Ethernet::loadCpuFirmware(const cpu_reg_t *cpuReg, const nx2_mips_fw
   address   = OSSwapBigToHostInt32(mipsEntry->data.address);
   length    = OSSwapBigToHostInt32(mipsEntry->data.length);
   fwOffset  = OSSwapBigToHostInt32(mipsEntry->data.offset);
-  codePtr   = (UInt32*) &firmwareMips[fwOffset];
+  codePtr   = (UInt32*) &(((UInt8*)firmwareMips)[fwOffset]);
   offset    = cpuReg->spadBase + (address - cpuReg->mipsViewBase);
   
   if (length) {
@@ -540,7 +540,7 @@ void AzulNX2Ethernet::loadCpuFirmware(const cpu_reg_t *cpuReg, const nx2_mips_fw
   address   = OSSwapBigToHostInt32(mipsEntry->roData.address);
   length    = OSSwapBigToHostInt32(mipsEntry->roData.length);
   fwOffset  = OSSwapBigToHostInt32(mipsEntry->roData.offset);
-  codePtr   = (UInt32*) &firmwareMips[fwOffset];
+  codePtr   = (UInt32*) &(((UInt8*)firmwareMips)[fwOffset]);
   offset    = cpuReg->spadBase + (address - cpuReg->mipsViewBase);
   
   if (length) {
@@ -555,7 +555,7 @@ void AzulNX2Ethernet::loadCpuFirmware(const cpu_reg_t *cpuReg, const nx2_mips_fw
   address = OSSwapBigToHostInt32(mipsEntry->startAddress);
   writeRegIndr32(cpuReg->inst, 0);
   writeRegIndr32(cpuReg->pc, address);
-  IOLog("AzulNX2Ethernet: MIPS CPU 0x%X will start at 0x%X\n", cpuReg->mode, address);
+  DBGLOG("MIPS CPU 0x%X will start at 0x%X", cpuReg->mode, address);
 }
 
 void AzulNX2Ethernet::startCpu(const cpu_reg_t *cpuReg) {
@@ -567,6 +567,7 @@ void AzulNX2Ethernet::startCpu(const cpu_reg_t *cpuReg) {
   
   writeRegIndr32(cpuReg->state, cpuReg->stateValueClear);
   writeRegIndr32(cpuReg->mode, reg);
+  DBGLOG("MIPS CPU 0x%X started", cpuReg->mode);
 }
 
 void AzulNX2Ethernet::stopCpu(const cpu_reg_t *cpuReg) {
@@ -578,11 +579,11 @@ void AzulNX2Ethernet::stopCpu(const cpu_reg_t *cpuReg) {
   
   writeRegIndr32(cpuReg->mode, reg);
   writeRegIndr32(cpuReg->state, cpuReg->stateValueClear);
+  DBGLOG("MIPS CPU 0x%X stopped", cpuReg->mode);
 }
 
 void AzulNX2Ethernet::initCpuRxp() {
-  cpu_reg_t           rxpCpuReg;
-  nx2_mips_fw_file_t  *mipsFirmware = (nx2_mips_fw_file_t*) firmwareMips;
+  cpu_reg_t rxpCpuReg;
   
   rxpCpuReg.mode              = NX2_RXP_CPU_MODE;
   rxpCpuReg.modeValueHalt     = NX2_RXP_CPU_MODE_SOFT_HALT;
@@ -597,14 +598,13 @@ void AzulNX2Ethernet::initCpuRxp() {
   rxpCpuReg.spadBase          = NX2_RXP_SCRATCH;
   rxpCpuReg.mipsViewBase      = 0x8000000;
   
-  loadCpuFirmware(&rxpCpuReg, &mipsFirmware->rxp);
+  loadCpuFirmware(&rxpCpuReg, &firmwareMips->rxp);
   startCpu(&rxpCpuReg);
-  IOLog("AzulNX2Ethernet: Started RX processor\n");
+  DBGLOG("RX processor initialized and started");
 }
 
 void AzulNX2Ethernet::initCpuTxp() {
-  cpu_reg_t           txpCpuReg;
-  nx2_mips_fw_file_t  *mipsFirmware = (nx2_mips_fw_file_t*) firmwareMips;
+  cpu_reg_t txpCpuReg;
   
   txpCpuReg.mode              = NX2_TXP_CPU_MODE;
   txpCpuReg.modeValueHalt     = NX2_TXP_CPU_MODE_SOFT_HALT;
@@ -619,16 +619,13 @@ void AzulNX2Ethernet::initCpuTxp() {
   txpCpuReg.spadBase          = NX2_TXP_SCRATCH;
   txpCpuReg.mipsViewBase      = 0x8000000;
   
-  loadCpuFirmware(&txpCpuReg, &mipsFirmware->txp);
+  loadCpuFirmware(&txpCpuReg, &firmwareMips->txp);
   startCpu(&txpCpuReg);
-  IOLog("AzulNX2Ethernet: Started TX processor\n");
-  
-  SYSLOG("TXP PC %X", readRegIndr32(NX2_TXP_CPU_PROGRAM_COUNTER));
+  DBGLOG("TX processor initialized and started");
 }
 
 void AzulNX2Ethernet::initCpuTpat() {
-  cpu_reg_t           tpatCpuReg;
-  nx2_mips_fw_file_t  *mipsFirmware = (nx2_mips_fw_file_t*) firmwareMips;
+  cpu_reg_t tpatCpuReg;
   
   tpatCpuReg.mode             = NX2_TPAT_CPU_MODE;
   tpatCpuReg.modeValueHalt    = NX2_TPAT_CPU_MODE_SOFT_HALT;
@@ -643,14 +640,13 @@ void AzulNX2Ethernet::initCpuTpat() {
   tpatCpuReg.spadBase         = NX2_TPAT_SCRATCH;
   tpatCpuReg.mipsViewBase     = 0x8000000;
   
-  loadCpuFirmware(&tpatCpuReg, &mipsFirmware->tpat);
+  loadCpuFirmware(&tpatCpuReg, &firmwareMips->tpat);
   startCpu(&tpatCpuReg);
-  IOLog("AzulNX2Ethernet: Started TX patch-up processor\n");
+  DBGLOG("TX patch-up processor initialized and started");
 }
 
 void AzulNX2Ethernet::initCpuCom() {
-  cpu_reg_t           comCpuReg;
-  nx2_mips_fw_file_t  *mipsFirmware = (nx2_mips_fw_file_t*) firmwareMips;
+  cpu_reg_t comCpuReg;
   
   comCpuReg.mode              = NX2_COM_CPU_MODE;
   comCpuReg.modeValueHalt     = NX2_COM_CPU_MODE_SOFT_HALT;
@@ -665,14 +661,13 @@ void AzulNX2Ethernet::initCpuCom() {
   comCpuReg.spadBase          = NX2_COM_SCRATCH;
   comCpuReg.mipsViewBase      = 0x8000000;
   
-  loadCpuFirmware(&comCpuReg, &mipsFirmware->com);
+  loadCpuFirmware(&comCpuReg, &firmwareMips->com);
   startCpu(&comCpuReg);
-  IOLog("AzulNX2Ethernet: Started Completion processor\n");
+  DBGLOG("Completion processor initialized and started");
 }
 
 void AzulNX2Ethernet::initCpuCp() {
-  cpu_reg_t           cpCpuReg;
-  nx2_mips_fw_file_t  *mipsFirmware = (nx2_mips_fw_file_t*) firmwareMips;
+  cpu_reg_t cpCpuReg;
   
   cpCpuReg.mode               = NX2_CP_CPU_MODE;
   cpCpuReg.modeValueHalt      = NX2_CP_CPU_MODE_SOFT_HALT;
@@ -687,7 +682,7 @@ void AzulNX2Ethernet::initCpuCp() {
   cpCpuReg.spadBase           = NX2_CP_SCRATCH;
   cpCpuReg.mipsViewBase       = 0x8000000;
   
-  loadCpuFirmware(&cpCpuReg, &mipsFirmware->cp);
+  loadCpuFirmware(&cpCpuReg, &firmwareMips->cp);
   startCpu(&cpCpuReg);
-  IOLog("AzulNX2Ethernet: Started Command processor\n");
+  DBGLOG("Command processor initialized and started");
 }

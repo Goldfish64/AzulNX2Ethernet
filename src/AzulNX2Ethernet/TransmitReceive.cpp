@@ -18,6 +18,10 @@ void AzulNX2Ethernet::initTxRxRegs() {
   writeReg32(NX2_HC_TX_TICKS, (TX_INT_TICKS << 16) | TX_INT_TICKS);
   writeReg32(NX2_HC_TX_QUICK_CONS_TRIP, (TX_QUICK_CONS_TRIP << 16) | TX_QUICK_CONS_TRIP);
   
+  //
+  // Program RX page size.
+  //
+  writeReg32(NX2_RV2P_CONFIG, (RX_PAGE_BITS - 8) << 24);
   writeReg32(NX2_MQ_MAP_L2_5, readReg32(NX2_MQ_MAP_L2_5) | NX2_MQ_MAP_L2_5_ARM);
   
   //
@@ -190,7 +194,7 @@ void AzulNX2Ethernet::handleTxInterrupt(UInt16 txConsNew) {
   //
   // Free any newly completed packets.
   //
-  while (txCons <= txConsNew) {
+  while (txCons != txConsNew) {
     txIndex = TX_BD_INDEX(txCons);
     
     if (txPackets[txIndex] != NULL) {
@@ -289,7 +293,6 @@ bool AzulNX2Ethernet::initRxDescriptor(UInt16 index) {
   rxChain[index].addrLo   = ADDR_LO(segment.location);
   rxChain[index].flags    = RX_BD_FLAGS_START | RX_BD_FLAGS_END;
   rxChain[index].length   = (UInt32)segment.length;
-  rxPacketLengths[index]  = rxChain[index].length;
   
   rxProdBufferSize   += rxChain[index].length;
   rxProd              = RX_NEXT_BD(rxProd);
@@ -325,7 +328,7 @@ void AzulNX2Ethernet::handleRxInterrupt(UInt16 rxConsNew) {
   //
   // Process any newly received packets.
   //
-  while (rxCons < rxConsNew) {
+  while (rxCons != rxConsNew) {
     rxIndex = RX_BD_INDEX(rxCons);
     rxCons = RX_NEXT_BD(rxCons);
     

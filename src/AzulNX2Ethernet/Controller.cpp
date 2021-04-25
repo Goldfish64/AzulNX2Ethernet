@@ -261,8 +261,7 @@ bool AzulNX2Ethernet::initControllerChip() {
   writeReg32(NX2_MQ_KNL_BYP_WIND_START, reg);
   writeReg32(NX2_MQ_KNL_WIND_END, reg);
   
-  reg = 6 << 24;
-  writeReg32(NX2_RV2P_CONFIG, reg);
+
   
   initTxRxRegs();
   

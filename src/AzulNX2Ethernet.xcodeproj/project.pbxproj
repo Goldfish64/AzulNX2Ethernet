@@ -16,6 +16,16 @@
 		41E9330B2634AB5000AAD2D2 /* TransmitReceive.cpp in Sources */ = {isa = PBXBuildFile; fileRef = 41E9330A2634AB4F00AAD2D2 /* TransmitReceive.cpp */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		41E9332026360EC300AAD2D2 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 41D7399B2625050D00CD96B7 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 41E9331A26360E9000AAD2D2;
+			remoteInfo = "Generate firmware header";
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		41D739A42625050E00CD96B7 /* AzulNX2Ethernet.kext */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AzulNX2Ethernet.kext; sourceTree = BUILT_PRODUCTS_DIR; };
 		41D739A72625050E00CD96B7 /* AzulNX2Ethernet.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AzulNX2Ethernet.h; sourceTree = "<group>"; };
@@ -25,12 +35,12 @@
 		41E932F22625066800AAD2D2 /* Registers.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Registers.h; sourceTree = "<group>"; };
 		41E932F32625078000AAD2D2 /* Private.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Private.cpp; sourceTree = "<group>"; };
 		41E932F82625157E00AAD2D2 /* Controller.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = Controller.cpp; sourceTree = "<group>"; };
-		41E932FB2626650F00AAD2D2 /* Firmware.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = Firmware.h; sourceTree = "<group>"; };
 		41E932FD26267F9C00AAD2D2 /* FirmwareStructs.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = FirmwareStructs.h; sourceTree = "<group>"; };
 		41E932FF262B60C500AAD2D2 /* PHY.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = PHY.cpp; sourceTree = "<group>"; };
 		41E93303262BA84600AAD2D2 /* PHY.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = PHY.h; sourceTree = "<group>"; };
 		41E93307263478DA00AAD2D2 /* HwBuffers.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = HwBuffers.h; sourceTree = "<group>"; };
 		41E9330A2634AB4F00AAD2D2 /* TransmitReceive.cpp */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.cpp; path = TransmitReceive.cpp; sourceTree = "<group>"; };
+		41E933162635F94E00AAD2D2 /* GenerateFirmwareHeader.sh */ = {isa = PBXFileReference; lastKnownFileType = text.script.sh; path = GenerateFirmwareHeader.sh; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -68,8 +78,8 @@
 				41D739A92625050E00CD96B7 /* AzulNX2Ethernet.cpp */,
 				41D739A72625050E00CD96B7 /* AzulNX2Ethernet.h */,
 				41E932F82625157E00AAD2D2 /* Controller.cpp */,
-				41E932FB2626650F00AAD2D2 /* Firmware.h */,
 				41E932FD26267F9C00AAD2D2 /* FirmwareStructs.h */,
+				41E933162635F94E00AAD2D2 /* GenerateFirmwareHeader.sh */,
 				41E93307263478DA00AAD2D2 /* HwBuffers.h */,
 				41D739AB2625050E00CD96B7 /* Info.plist */,
 				41E932FF262B60C500AAD2D2 /* PHY.cpp */,
@@ -102,6 +112,23 @@
 		};
 /* End PBXHeadersBuildPhase section */
 
+/* Begin PBXLegacyTarget section */
+		41E9331A26360E9000AAD2D2 /* Generate firmware header */ = {
+			isa = PBXLegacyTarget;
+			buildArgumentsString = "";
+			buildConfigurationList = 41E9331B26360E9000AAD2D2 /* Build configuration list for PBXLegacyTarget "Generate firmware header" */;
+			buildPhases = (
+			);
+			buildToolPath = "$(PROJECT_DIR)/AzulNX2Ethernet/GenerateFirmwareHeader.sh";
+			buildWorkingDirectory = "$(PROJECT_DIR)/AzulNX2Ethernet";
+			dependencies = (
+			);
+			name = "Generate firmware header";
+			passBuildSettingsInEnvironment = 0;
+			productName = "Generate firmware header";
+		};
+/* End PBXLegacyTarget section */
+
 /* Begin PBXNativeTarget section */
 		41D739A32625050E00CD96B7 /* AzulNX2Ethernet */ = {
 			isa = PBXNativeTarget;
@@ -115,6 +142,7 @@
 			buildRules = (
 			);
 			dependencies = (
+				41E9332126360EC300AAD2D2 /* PBXTargetDependency */,
 			);
 			name = AzulNX2Ethernet;
 			productName = AzulNX2Ethernet;
@@ -132,6 +160,9 @@
 					41D739A32625050E00CD96B7 = {
 						CreatedOnToolsVersion = 12.4;
 					};
+					41E9331A26360E9000AAD2D2 = {
+						CreatedOnToolsVersion = 12.4;
+					};
 				};
 			};
 			buildConfigurationList = 41D7399E2625050D00CD96B7 /* Build configuration list for PBXProject "AzulNX2Ethernet" */;
@@ -147,6 +178,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
+				41E9331A26360E9000AAD2D2 /* Generate firmware header */,
 				41D739A32625050E00CD96B7 /* AzulNX2Ethernet */,
 			);
 		};
@@ -176,6 +208,14 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		41E9332126360EC300AAD2D2 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 41E9331A26360E9000AAD2D2 /* Generate firmware header */;
+			targetProxy = 41E9332026360EC300AAD2D2 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		41D739AC2625050E00CD96B7 /* Debug */ = {
@@ -337,6 +377,31 @@
 			};
 			name = Release;
 		};
+		41E9331C26360E9000AAD2D2 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEBUGGING_SYMBOLS = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				GCC_GENERATE_DEBUGGING_SYMBOLS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Debug;
+		};
+		41E9331D26360E9000AAD2D2 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				OTHER_CFLAGS = "";
+				OTHER_LDFLAGS = "";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -354,6 +419,15 @@
 			buildConfigurations = (
 				41D739AF2625050E00CD96B7 /* Debug */,
 				41D739B02625050E00CD96B7 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		41E9331B26360E9000AAD2D2 /* Build configuration list for PBXLegacyTarget "Generate firmware header" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				41E9331C26360E9000AAD2D2 /* Debug */,
+				41E9331D26360E9000AAD2D2 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

@@ -69,3 +69,4 @@ iOSInjectionProject/
 
 .DS_Store
 src/MacKernelSDK
+src/AzulNX2Ethernet/FirmwareGenerated.h
