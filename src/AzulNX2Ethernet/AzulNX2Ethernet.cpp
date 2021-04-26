@@ -148,8 +148,11 @@ void AzulNX2Ethernet::interruptOccurred(IOInterruptEventSource *source, int coun
   
   //IOLog("INT\n");
  // IOLog("INT status %X ack %X, %X time %X IDX %X\n", hcsMem32[0], hcsMem32[1], hcsMem32[8], (((uint8_t*)stsBlockData)[0x34]), hcsMem32[13]);
+  UInt32 i = statusBlock->index;
+  if (i % 200 == 0) {
+    SYSLOG("INT status %X (%X) index %u tx idx %u rx idx %u", statusBlock->attnBits, statusBlock->attnBitsAck, statusBlock->index, readTxCons(), readRxCons());
+  }
   
- // SYSLOG("INT status %X (%X) index %u tx idx %u rx idx %u", statusBlock->attnBits, statusBlock->attnBitsAck, statusBlock->index, readTxCons(), statusBlock->status_rx_quick_consumer_index0);
   
  // SYSLOG("RX EMAC STS %X %X %X", readReg32(NX2_EMAC_RX_STAT_IFHCINBADOCTETS), readReg32(NX2_EMAC_RX_STAT_IFHCINOCTETS), readReg32(NX2_EMAC_RX_STAT_IFHCINBROADCASTPKTS));
  // SYSLOG("TX EMAC STS %X %X", readReg32(NX2_EMAC_TX_STATUS), readReg32(NX2_EMAC_TX_STAT_IFHCOUTOCTETS));
@@ -188,3 +191,15 @@ IOReturn AzulNX2Ethernet::getMaxPacketSize(UInt32 *maxSize) const
   return kIOReturnSuccess;
 }
 
+IOReturn AzulNX2Ethernet::setMulticastMode(bool active) {
+  return kIOReturnUnsupported;
+}
+
+IOReturn AzulNX2Ethernet::setMulticastList(IOEthernetAddress *addrs, UInt32 count) {
+  return kIOReturnUnsupported;
+}
+
+IOReturn AzulNX2Ethernet::setPromiscuousMode(bool active) {
+  setRxMode(active);
+  return kIOReturnSuccess;
+}

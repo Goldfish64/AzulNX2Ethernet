@@ -85,7 +85,7 @@ void AzulNX2Ethernet::freeTxRing() {
 }
 
 UInt16 AzulNX2Ethernet::readTxCons() { // TODO: make inline
-  UInt16 cons = statusBlock->status_tx_quick_consumer_index0;
+  UInt16 cons = statusBlock->txConsumer0;
   if ((cons & TX_USABLE_BD_COUNT) == TX_USABLE_BD_COUNT) {
     cons++;
   }
@@ -237,9 +237,6 @@ bool AzulNX2Ethernet::initRxRing() {
   rxBdLast->addrHi = ADDR_HI(rxBuffer.physAddr);
   rxBdLast->addrLo = ADDR_LO(rxBuffer.physAddr);
   
-  rxCursor = IOMbufNaturalMemoryCursor::withSpecification(MAX_PACKET_SIZE,
-                                                          RX_MAX_SEG_COUNT); // TODO: move
-  
   //
   // Allocate packets in RX chain, skipping already allocated packets.
   //
@@ -304,7 +301,7 @@ void AzulNX2Ethernet::freeRxRing() {
 }
 
 UInt16 AzulNX2Ethernet::readRxCons() { // TODO: make inline
-  UInt16 cons = statusBlock->status_rx_quick_consumer_index0;
+  UInt16 cons = statusBlock->rxConsumer0;
   if ((cons & RX_USABLE_BD_COUNT) == RX_USABLE_BD_COUNT) {
     cons++;
   }
@@ -380,56 +377,41 @@ void AzulNX2Ethernet::handleRxInterrupt(UInt16 rxConsNew) {
   
   writeReg16(MB_GET_CID_ADDR(RX_CID) + NX2_L2MQ_RX_HOST_BDIDX, rxProd);
   writeReg32(MB_GET_CID_ADDR(RX_CID) + NX2_L2MQ_RX_HOST_BSEQ, rxProdBufferSize);
-  /*
+}
+
+void AzulNX2Ethernet::setRxMode(bool promiscuous) {
+  UInt32 sortMode = 1 | NX2_RPM_SORT_USER0_BC_EN;
+  
   //
-  // Incoming packets have a header structure in front of the actual packet, plus two bytes.
+  // RX mode defaults to normal traffic sorting only.
   //
-  l2Header = (rx_l2_header_t*) mbuf_data(rxPackets[rxConsNew - 1]);
+  rxMode = NX2_EMAC_RX_MODE_SORT_MODE;
   
-  inputPacket = rxPackets[rxConsNew - 1];
+  if (promiscuous) {
+    rxMode |= NX2_EMAC_RX_MODE_PROMISCUOUS;
+    sortMode  |= NX2_RPM_SORT_USER0_PROM_EN;
+    
+    DBGLOG("Promiscuous mode will be enabled");
+  }
   
+  //
+  // Set RX and sort mode.
+  //
+  DBGLOG("Setting RX mode 0x%X, sort mode 0x%X", rxMode, sortMode);
+  writeReg32(NX2_EMAC_RX_MODE, rxMode);
   
+  writeReg32(NX2_RPM_SORT_USER0, 0);
+  writeReg32(NX2_RPM_SORT_USER0, sortMode);
+  writeReg32(NX2_RPM_SORT_USER0, sortMode | NX2_RPM_SORT_USER0_ENA);
+}
 
-  if (l2Header == NULL) {
-    return;
-  }
-  
-  
-  if (l2Header->status & L2_FHDR_STATUS_IP_DATAGRAM) {
-    checksumValidMask |= kChecksumIP;
-  }
-  
-  if (l2Header->status & L2_FHDR_STATUS_TCP_SEGMENT) {
-    checksumValidMask |= kChecksumTCP;
-  }
-  
-  if (l2Header->status & L2_FHDR_STATUS_UDP_DATAGRAM) {
-    checksumValidMask |= kChecksumUDP;
-  }
-  
-
-  
-  DBGLOG("start len %u sts %u err %u", l2Header->packetLength, l2Header->status, l2Header->errors);
-  packetLength = l2Header->packetLength - 4;
-  
-  if (packetLength > MAX_PACKET_SIZE || l2Header->status == 0 || l2Header->errors != 0) {
-    return;
-  }
-  
- // inputPacket = replaceOrCopyPacket(&rxPackets[rxConsNew], packetLength, &replaced);
-  mbuf_adj(inputPacket,  sizeof (rx_l2_header_t) + 2);
-  mbuf_adj(inputPacket, -4);
-  
-  setChecksumResult(inputPacket, kChecksumFamilyTCPIP, (kChecksumIP | kChecksumTCP | kChecksumUDP), checksumValidMask);
-  
-  UInt8 *data = (UInt8*)mbuf_data(inputPacket);
-  
-  
-  
-  
-  DBGLOG("data %X %X %X %X %X %X %X len %u", data[0], data[1], data[2], data[3], data[4], data[5], data[6], mbuf_len(inputPacket));
-  
-  ethInterface->inputPacket(inputPacket, packetLength, 0);
-  */
-
+void AzulNX2Ethernet::setMacAddress() {
+  //
+  // Program MAC address filtering for incoming packets.
+  //
+  writeReg32(NX2_EMAC_MAC_MATCH0,
+             (ethAddress.bytes[0] << 8) | ethAddress.bytes[1]);
+  writeReg32(NX2_EMAC_MAC_MATCH1,
+             (ethAddress.bytes[2] << 24) | (ethAddress.bytes[3] << 16) |
+             (ethAddress.bytes[4] << 8)  | ethAddress.bytes[5]);
 }

@@ -95,6 +95,8 @@ private:
   UInt32                      rxPacketLengths[RX_USABLE_BD_COUNT];
   IOOutputQueue               *rxQueue;
   IOMbufNaturalMemoryCursor   *rxCursor;
+  
+  UInt32                      rxMode;
 
   
   
@@ -134,11 +136,10 @@ private:
   bool firmwareSync(UInt32 msgData);
   bool initContext();
 
-  
+  //
+  // Processors
+  //
   void initCpus();
-  
-
-  
   UInt32 processRv2pFixup(UInt32 rv2pProc, UInt32 index, UInt32 fixup, UInt32 rv2pCode);
   void loadRv2pFirmware(UInt32 rv2pProcessor, const nx2_rv2p_fw_file_entry_t *rv2pEntry);
   void loadCpuFirmware(const cpu_reg_t *cpuReg, const nx2_mips_fw_file_entry_t *mipsEntry);
@@ -156,7 +157,6 @@ private:
   bool prepareController();
   bool resetController(UInt32 resetCode);
   bool initControllerChip();
-  bool initTransmitBuffers();
   
   //
   // PHY-related
@@ -193,6 +193,9 @@ private:
   UInt16 readRxCons();
   void handleRxInterrupt(UInt16 rxConsIndexNew);
   
+  void setRxMode(bool promiscuous);
+  void setMacAddress();
+  
   void interruptOccurred(IOInterruptEventSource *source, int count);
   
 public:
@@ -224,6 +227,9 @@ public:
   virtual IOReturn getHardwareAddress(IOEthernetAddress *address);
   
   virtual IOReturn getMaxPacketSize(UInt32 *maxSize) const;
+  virtual IOReturn setMulticastMode(bool active);
+  virtual IOReturn setMulticastList(IOEthernetAddress *addrs, UInt32 count);
+  virtual IOReturn setPromiscuousMode(bool active);
   
   
 };
