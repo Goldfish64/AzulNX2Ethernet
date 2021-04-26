@@ -32,7 +32,7 @@ bool AzulNX2Ethernet::prepareController() {
   char modelName[64];
   snprintf(modelName, sizeof (modelName), "%s %s", getDeviceVendor(), getDeviceModel());
   setProperty("model", modelName);
-  SYSLOG("Controller is %s", modelName);
+  SYSLOG("Controller is %s, revision %c%d", modelName, ((NX2_CHIP_ID & 0xF000) >> 12) + 'A', (NX2_CHIP_ID & 0x0FF0) >> 4);
   
   //
   // Enable the REG_WINDOW register for indirect reads/writes, and enable mailbox word swapping.
@@ -293,8 +293,6 @@ bool AzulNX2Ethernet::initControllerChip() {
   /* Set the perfect match control register to default. */
   writeRegIndr32(NX2_RXP_PM_CTRL, 0);
   
-  //writeReg32(NX2_EMAC_RX_MODE, NX2_RPM_SORT_USER0_PROM_EN | NX2_EMAC_RX_MODE_PROMISCUOUS);
- // writeReg32(NX2_EMAC_RX_MODE, NX2_EMAC_RX_MODE_SORT_MODE);
   setRxMode(false);
   
   if (NX2_CHIP_NUM == NX2_CHIP_NUM_5709) {
