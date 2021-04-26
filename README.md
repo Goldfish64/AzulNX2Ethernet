@@ -1,7 +1,7 @@
 # AzulNX2Ethernet
 QLogic NetXtreme II driver for macOS
 
-This driver is a work-in-progress that aims to support the various 1GB QLogic (formerlly Broadcom) NetXtreme II server-grade network cards. This driver is based primarily on the FreeBSD `bce` driver, with the Linux `bnx2` driver and the Broadcom programmers guide for the NetXtreme II used as additional references.
+This driver is a work-in-progress that aims to support the various 1GB QLogic (formerly Broadcom) NetXtreme II server-grade network cards. This driver is based primarily on the FreeBSD `bce` driver, with the Linux `bnx2` driver and the Broadcom programmers guide for the NetXtreme II used as additional references.
 
 ## Supported cards
 | Card     | PCI Device ID |
