@@ -362,6 +362,8 @@ void AzulNX2Ethernet::handleRxInterrupt(UInt16 rxConsNew) {
     l2Header = (rx_l2_header_t*) mbuf_data(inputPacket);
     
     if (l2Header == NULL) {
+      freePacket(inputPacket);
+      initRxDescriptor(rxIndex, true);
       continue;
     }
     
