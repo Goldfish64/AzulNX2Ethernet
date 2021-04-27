@@ -27,7 +27,7 @@
 			<key>IOClass</key>
 			<string>$(PRODUCT_NAME)</string>
 			<key>IOPCIMatch</key>
-			<string>0x163914e4</string>
+			<string>0x164a14e4 0x16aa1434 0x164c14e4 0x16ac14e4 0x163914e4 0x163a14e4 0x163b14e4</string>
 			<key>IOProbeScore</key>
 			<integer>1000</integer>
 			<key>IOProviderClass</key>

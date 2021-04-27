@@ -180,6 +180,8 @@ private:
   bool prepareController();
   bool resetController(UInt32 resetCode);
   bool initControllerChip();
+  bool startController();
+  void stopController();
   
   //
   // PHY-related
@@ -211,7 +213,7 @@ private:
   
   void initRxRegs();
   bool initRxRing();
-  bool initRxDescriptor(UInt16 index);
+  bool initRxDescriptor(UInt16 index, bool forceAllocate);
   void freeRxRing();
   UInt16 readRxCons();
   void handleRxInterrupt(UInt16 rxConsIndexNew);
@@ -226,6 +228,8 @@ public:
   // IOService methods.
   //
   virtual bool start(IOService *provider);
+  virtual void stop(IOService *provider);
+  virtual void free();
   virtual IOWorkLoop *getWorkLoop() const;
   
 

@@ -23,6 +23,10 @@
 
 #include "AzulNX2Ethernet.h"
 
+/*bool AzulNX2Ethernet::allocateTxRxBuffers() {
+  
+}*/
+
 void AzulNX2Ethernet::initTxRxRegs() {
   UInt32 reg;
   
@@ -64,7 +68,6 @@ bool AzulNX2Ethernet::initTxRing() {
   txCons            = 0;
   txProdBufferSize  = 0;
   txFreeDescriptors = TX_USABLE_BD_COUNT - 1;
-  memset(txPackets, 0, sizeof (txPackets));
   
   //
   // Initialize transmit chain.
@@ -234,8 +237,6 @@ void AzulNX2Ethernet::handleTxInterrupt(UInt16 txConsNew) {
 }
 
 bool AzulNX2Ethernet::initRxRing() {
-
-  
   rx_bd_t           *rxBdLast;
   
   //
@@ -245,7 +246,6 @@ bool AzulNX2Ethernet::initRxRing() {
   rxCons            = 0;
   rxProdBufferSize  = 0;
   rxFreeDescriptors = 0;
-  memset(rxPackets, 0, sizeof (rxPackets)); // TODO: ???
   
   //
   // Initialize receive chain.
@@ -263,12 +263,8 @@ bool AzulNX2Ethernet::initRxRing() {
   //
   // Allocate packets in RX chain, skipping already allocated packets.
   //
-  for (int i = 0; i < RX_USABLE_BD_COUNT; i++) {
-    if (rxPackets[i] != NULL) {
-      continue;
-    }
-    
-    if (!initRxDescriptor(i)) {
+  for (UInt16 i = 0; i < RX_USABLE_BD_COUNT; i++) {
+    if (!initRxDescriptor(i, false)) {
       return false;
     }
   }
@@ -292,16 +288,18 @@ bool AzulNX2Ethernet::initRxRing() {
   return true;
 }
 
-bool AzulNX2Ethernet::initRxDescriptor(UInt16 index) {
+bool AzulNX2Ethernet::initRxDescriptor(UInt16 index, bool forceAllocate) {
   IOPhysicalSegment segment;
   UInt32            segmentCount;
   
   //
   // Allocate and configure packet.
   //
-  rxPackets[index] = allocatePacket(MAX_PACKET_SIZE);
-  if (rxPackets[index] == NULL) {
-    return false;
+  if (rxPackets[index] == NULL || forceAllocate) {
+    rxPackets[index] = allocatePacket(MAX_PACKET_SIZE);
+    if (rxPackets[index] == NULL) {
+      return false;
+    }
   }
   
   segmentCount = rxCursor->getPhysicalSegmentsWithCoalesce(rxPackets[index], &segment, RX_MAX_SEG_COUNT);
@@ -320,7 +318,16 @@ bool AzulNX2Ethernet::initRxDescriptor(UInt16 index) {
 }
 
 void AzulNX2Ethernet::freeRxRing() {
-  // TODO:
+  //
+  // Free any allocated packets.
+  //
+  for (int i = 0; i < RX_USABLE_BD_COUNT; i++) {
+    if (rxPackets[i] == NULL) {
+      continue;
+    }
+    
+    freePacket(rxPackets[i]);
+  }
 }
 
 UInt16 AzulNX2Ethernet::readRxCons() { // TODO: make inline
@@ -340,17 +347,13 @@ void AzulNX2Ethernet::handleRxInterrupt(UInt16 rxConsNew) {
   
   UInt16 rxIndex;
   
- // if (rxConsNew == 0) {
-  //  return;
- // }
-  //rxCons++;
-  
   //
   // Process any newly received packets.
   //
+ // DBGLOG("start idx %u %u", rxCons, rxConsNew);
   while (rxCons != rxConsNew) {
     rxIndex = RX_BD_INDEX(rxCons);
-    rxCons = RX_NEXT_BD(rxCons);
+    rxCons  = RX_NEXT_BD(rxCons);
     
     //
     // Incoming packets have a header structure in front of the actual packet, plus two bytes.
@@ -361,7 +364,6 @@ void AzulNX2Ethernet::handleRxInterrupt(UInt16 rxConsNew) {
     if (l2Header == NULL) {
       continue;
     }
-    
     
     if (l2Header->status & L2_FHDR_STATUS_IP_DATAGRAM) {
       checksumValidMask |= kChecksumIP;
@@ -378,8 +380,10 @@ void AzulNX2Ethernet::handleRxInterrupt(UInt16 rxConsNew) {
     //DBGLOG("start len %u sts %u err %u idx %u", l2Header->packetLength, l2Header->status, l2Header->errors, rxIndex);
     packetLength = l2Header->packetLength - 4;
     
-    if (packetLength > MAX_PACKET_SIZE || l2Header->status == 0 || l2Header->errors != 0) {
+    if (packetLength > MAX_PACKET_SIZE || l2Header->errors != 0) {
       DBGLOG("RX error start len %u sts %u err %u idx %u", l2Header->packetLength, l2Header->status, l2Header->errors, rxIndex);
+      freePacket(inputPacket);
+      initRxDescriptor(rxIndex, true);
       continue;
     }
     
@@ -395,7 +399,7 @@ void AzulNX2Ethernet::handleRxInterrupt(UInt16 rxConsNew) {
     
     ethInterface->inputPacket(inputPacket, packetLength, 0);
     
-    initRxDescriptor(rxIndex);
+    initRxDescriptor(rxIndex, true);
   }
   
   writeReg16(MB_GET_CID_ADDR(RX_CID) + NX2_L2MQ_RX_HOST_BDIDX, rxProd);

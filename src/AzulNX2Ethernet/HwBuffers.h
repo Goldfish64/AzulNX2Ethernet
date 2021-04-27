@@ -28,6 +28,7 @@
 #define PAGESIZE_4K     4096
 
 #define MAX_PACKET_SIZE           (kIOEthernetMaxPacketSize + 4)
+#define TX_QUEUE_LENGTH           1000
 
 //
 // Status block structure.

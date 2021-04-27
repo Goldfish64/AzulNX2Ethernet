@@ -26,13 +26,12 @@
 OSDefineMetaClassAndStructors (AzulNX2Ethernet, super);
 
 bool AzulNX2Ethernet::start(IOService *provider) {
-  bool started = false;
+  bool started     = false;
+  bool initialized = false;
   
-  SYSLOG("start()");
-  
-
   isEnabled = false;
   
+  DBGLOG("Starting driver load");
   
   do {
     if (!super::start(provider)) {
@@ -72,45 +71,76 @@ bool AzulNX2Ethernet::start(IOService *provider) {
     // Reset and configure the NetXtreme II controller.
     //
     if (!prepareController()) {
-      IOLog("AzulNX2Ethernet: Controller prep failed!\n");
+      SYSLOG("Controller prep failed!");
       break;
     }
     if (!resetController(NX2_DRV_MSG_CODE_RESET)) {
-      IOLog("AzulNX2Ethernet: Controller reset failed!\n");
+      SYSLOG("Controller reset failed!");
       break;
     }
     if (!initControllerChip()) {
-      IOLog("AzulNX2Ethernet: Controller initialization failed!\n");
+      SYSLOG("Controller initialization failed!");
       break;
     }
     
-    if (started == false) {
-      return false;
-    }
+    probePHY();
+    createMediumDictionary();
     
-    
+    initialized = true;
   } while (false);
   
   if (pciNub != NULL) {
     pciNub->close(this);
   }
+  
+  do {
+    if (!initialized) {
+      break;
+    }
+    initialized = false;
+    
+    //
+    // Attach network interface.
+    //
+    if (!attachInterface((IONetworkInterface **)&ethInterface, false)) {
+      break;
+    }
+    ethInterface->registerService();
+    initialized = true;
+  } while (false);
 
-  bool result = started;
+  if (started && !initialized) {
+    super::stop(provider);
+  } else {
+    DBGLOG("Controller is started");
+  }
   
+  return initialized;
+}
 
+void AzulNX2Ethernet::stop(IOService *provider) {
+  //
+  // Stop interrupt sources.
+  //
+  if (interruptSource != NULL) {
+    interruptSource->disable();
+    workLoop->removeEventSource(interruptSource);
+  }
   
-  result = attachInterface((IONetworkInterface **)&ethInterface);
-  
-  SYSLOG("rev %X", NX2_CHIP_ID);
-  
-  probePHY();
-  createMediumDictionary();
+  super::stop(provider);
+}
 
+void AzulNX2Ethernet::free() {
+  freeDmaBuffer(&statusBuffer);
+  freeDmaBuffer(&statsBuffer);
+  freeDmaBuffer(&txBuffer);
+  freeDmaBuffer(&rxBuffer);
   
-  //enableInterrupts(true);
- // setLinkStatus(kIONetworkLinkValid);
+  if (NX2_CHIP_NUM == NX2_CHIP_NUM_5709) {
+    freeDmaBuffer(&contextBuffer);
+  }
   
-  return result;
+  super::free();
 }
 
 IOWorkLoop* AzulNX2Ethernet::getWorkLoop() const {
@@ -123,7 +153,7 @@ bool AzulNX2Ethernet::createWorkLoop() {
 }
 
 IOOutputQueue* AzulNX2Ethernet::createOutputQueue() {
-  return IOBasicOutputQueue::withTarget(this, 1000);
+  return IOBasicOutputQueue::withTarget(this, TX_QUEUE_LENGTH);
 }
 
 const OSString* AzulNX2Ethernet::newVendorString() const {
@@ -143,15 +173,45 @@ UInt32 AzulNX2Ethernet::outputPacket(mbuf_t m, void *param) {
 }
 
 IOReturn AzulNX2Ethernet::enable(IONetworkInterface *interface) {
-  DBGLOG("enable()");
+  DBGLOG("Enabling controller...");
   
-  updatePHYMediaState();
+  bool initialized = false;
   
-  txQueue->setCapacity(1000);
-  txQueue->start();
+  do {
+    if (isEnabled) {
+      DBGLOG("Controller is already enabled!");
+      break;
+    }
+    
+    if (!pciNub->open(this)) {
+      break;
+    }
+    
+    stopController();
+    
+    if (!resetController(NX2_DRV_MSG_CODE_RESET)) {
+      SYSLOG("Controller reset failed!");
+      break;
+    }
+    if (!initControllerChip()) {
+      SYSLOG("Controller initialization failed!");
+      break;
+    }
+    
+    startController();
+    
+    updatePHYMediaState();
+    
+    txQueue->setCapacity(TX_QUEUE_LENGTH);
+    txQueue->start();
+    
+    isEnabled = true;
+    initialized = true;
+    DBGLOG("Controller is now enabled");
+    
+  } while (false);
   
- // return super::enable(interface);
-  return kIOReturnSuccess;
+  return initialized ? kIOReturnSuccess : kIOReturnIOError;
 }
 
 IOReturn AzulNX2Ethernet::getHardwareAddress(IOEthernetAddress *address) {
@@ -161,7 +221,7 @@ IOReturn AzulNX2Ethernet::getHardwareAddress(IOEthernetAddress *address) {
 
 void AzulNX2Ethernet::interruptOccurred(IOInterruptEventSource *source, int count) {
   if (!isEnabled) {
-    return;;
+    return;
   }
   
   writeReg32(NX2_PCICFG_INT_ACK_CMD, NX2_PCICFG_INT_ACK_CMD_USE_INT_HC_PARAM | NX2_PCICFG_INT_ACK_CMD_MASK_INT);

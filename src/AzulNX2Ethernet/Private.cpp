@@ -126,15 +126,14 @@ UInt32 AzulNX2Ethernet::readContext32(UInt32 cid, UInt32 offset) {
     
     for (int i = 0; i < 100; i++) {
       reg = readReg32(NX2_CTX_CTX_CTRL);
-     // IOLog("Context write %X\n", reg);
       if ((reg & NX2_CTX_CTX_CTRL_READ_REQ) == 0) {
-       // IOLog("Context write done!\n");
         return readReg32(NX2_CTX_CTX_DATA);
       }
       IODelay(5);
     }
   }
   
+  DBGLOG("Context read timeout!");
   return 0;
 }
 
@@ -166,7 +165,7 @@ void AzulNX2Ethernet::writeShMem32(UInt32 offset, UInt32 value) {
 
 void AzulNX2Ethernet::writeContext32(UInt32 cid, UInt32 offset, UInt32 value) {
   UInt32 reg = 0;
-  DBGLOG("Context write (cid = 0x%X, offset = 0x%X, value = 0x%X)", cid, offset, value);
+ // DBGLOG("Context write (cid = 0x%X, offset = 0x%X, value = 0x%X)", cid, offset, value);
   
   if (NX2_CHIP_NUM == NX2_CHIP_NUM_5709) {
     writeReg32(NX2_CTX_CTX_DATA, value);
@@ -174,13 +173,16 @@ void AzulNX2Ethernet::writeContext32(UInt32 cid, UInt32 offset, UInt32 value) {
     
     for (int i = 0; i < 100; i++) {
       reg = readReg32(NX2_CTX_CTX_CTRL);
-     // IOLog("Context write %X\n", reg);
       if ((reg & NX2_CTX_CTX_CTRL_WRITE_REQ) == 0) {
-       // IOLog("Context write done!\n");
         return;
       }
       IODelay(5);
     }
+    
+    DBGLOG("Context write timeout!");
+  } else {
+    writeReg32(NX2_CTX_DATA_ADR, (cid + offset));
+    writeReg32(NX2_CTX_DATA, value);
   }
 }
 
@@ -332,11 +334,9 @@ bool AzulNX2Ethernet::firmwareSync(UInt32 msgData) {
   for (int i = 0; i < FW_ACK_TIME_OUT_MS; i++) {
     reg = readShMem32(NX2_FW_MB);
     if ((reg & NX2_FW_MSG_ACK) == (msgData & NX2_DRV_MSG_SEQ)) {
-      IOLog("PASS... (0x%X) (0x%X)\n", reg, msgData);
       return true;
     }
     
-    IOLog("waiting... (0x%X) (0x%X)\n", reg, msgData);
     IODelay(50);
   }
   
@@ -347,7 +347,7 @@ bool AzulNX2Ethernet::firmwareSync(UInt32 msgData) {
       ((msgData & NX2_DRV_MSG_DATA) != NX2_DRV_MSG_DATA_WAIT0)) {
     msgData &= ~NX2_DRV_MSG_CODE;
     msgData |= NX2_DRV_MSG_CODE_FW_TIMEOUT;
-    IOLog("TIMEOUT... (0x%X) (0x%X)\n", reg, msgData);
+    SYSLOG("Timed out waiting for firmware to respond 0%X 0%X", reg, msgData);
     
     writeShMem32(NX2_DRV_MB, msgData);
     return false;
@@ -360,10 +360,14 @@ bool AzulNX2Ethernet::initContext() {
   UInt32 reg = 0;
   UInt64 ctxAddr = 0;
   
+  UInt32 virtualCidAddr;
+  
   //
   // 5709/5716 use host memory for the context. 5706/5708 have onboard memory.
   //
   if (NX2_CHIP_NUM == NX2_CHIP_NUM_5709) {
+    DBGLOG("Initializing 5709/5716 on-host context memory");
+    
     writeReg32(NX2_CTX_COMMAND,
                NX2_CTX_COMMAND_ENABLED |
                NX2_CTX_COMMAND_MEM_INIT |
@@ -414,7 +418,23 @@ bool AzulNX2Ethernet::initContext() {
       
       ctxAddr += 0x1000;
     }
+  } else {
+    DBGLOG("Initializing 5706/5708 on-controller context memory");
     
+    virtualCidAddr = GET_CID_ADDR(96);
+    while (virtualCidAddr != 0) {
+      virtualCidAddr -= PHY_CTX_SIZE;
+      
+      writeReg32(NX2_CTX_VIRT_ADDR, 0);
+      writeReg32(NX2_CTX_PAGE_TBL, virtualCidAddr);
+      
+      for (UInt32 i = 0; i < PHY_CTX_SIZE; i += 4) {
+        writeContext32(0x00, i, 0);
+      }
+      
+      writeReg32(NX2_CTX_VIRT_ADDR, virtualCidAddr);
+      writeReg32(NX2_CTX_PAGE_TBL, virtualCidAddr);
+    }
   }
   
   return true;

@@ -23,7 +23,6 @@
 
 #include "AzulNX2Ethernet.h"
 
-
 bool AzulNX2Ethernet::prepareController() {
   UInt32 reg;
   
@@ -125,6 +124,12 @@ bool AzulNX2Ethernet::prepareController() {
     }
   }
   
+  //
+  // Ensure packet arrays are clear.
+  //
+  memset(txPackets, 0, sizeof (txPackets));
+  memset(rxPackets, 0, sizeof (rxPackets));
+  
   return true;
 }
 
@@ -143,6 +148,9 @@ bool AzulNX2Ethernet::resetController(UInt32 resetCode) {
   readReg32(NX2_MISC_ENABLE_CLR_BITS);
   IODelay(10);
   
+  //
+  // Disable DMA.
+  //
   if (NX2_CHIP_NUM == NX2_CHIP_NUM_5709) {
     reg = readReg32(NX2_MISC_NEW_CORE_CTL);
     reg &= ~NX2_MISC_NEW_CORE_CTL_DMA_ENABLE;
@@ -204,7 +212,7 @@ bool AzulNX2Ethernet::resetController(UInt32 resetCode) {
     reg = readReg32(NX2_PCI_SWAP_DIAG0);
     if (reg != 0x01020304) {
       IOLog("AzulNX2Ethernet: byte swapping is invalid!\n");
-      break;;
+      break;
     }
     
     //
@@ -279,14 +287,15 @@ bool AzulNX2Ethernet::initControllerChip() {
   
   if (NX2_CHIP_NUM == NX2_CHIP_NUM_5709) {
     reg |= NX2_MQ_CONFIG_BIN_MQ_MODE;
+    if (NX2_CHIP_ID == NX2_CHIP_ID_5709_A1) {
+      reg |= NX2_MQ_CONFIG_HALT_DIS;
+    }
   }
   writeReg32(NX2_MQ_CONFIG, reg);
   
   reg = 0x10000 + (MAX_CID_CNT * MB_KERNEL_CTX_SIZE);
   writeReg32(NX2_MQ_KNL_BYP_WIND_START, reg);
   writeReg32(NX2_MQ_KNL_WIND_END, reg);
-  
-
   
   initTxRxRegs();
   
@@ -311,12 +320,10 @@ bool AzulNX2Ethernet::initControllerChip() {
   setMacAddress();
   
   writeReg32(NX2_HC_COMMAND, NX2_HC_COMMAND_CLR_STAT_NOW);
-  writeReg32(NX2_HC_ATTN_BITS_ENABLE, 0x1);//0xFFFFFFFF);//0x1 | (1<<18));
+  writeReg32(NX2_HC_ATTN_BITS_ENABLE, 0x1);
 #define NX2_RXP_PM_CTRL      0x0e00d0
   /* Set the perfect match control register to default. */
   writeRegIndr32(NX2_RXP_PM_CTRL, 0);
-  
-  setRxMode(false);
   
   if (NX2_CHIP_NUM == NX2_CHIP_NUM_5709) {
     reg = readReg32(NX2_MISC_NEW_CORE_CTL);
@@ -328,8 +335,18 @@ bool AzulNX2Ethernet::initControllerChip() {
   
   firmwareSync(NX2_DRV_MSG_DATA_WAIT2 | NX2_DRV_MSG_CODE_RESET);
   
+
+
+  return true;
+}
+
+bool AzulNX2Ethernet::startController() {
+  setRxMode(false);
+  
   if (NX2_CHIP_NUM == NX2_CHIP_NUM_5709) {
     writeReg32(NX2_MISC_ENABLE_SET_BITS, NX2_MISC_ENABLE_DEFAULT_XI);
+  } else {
+    writeReg32(NX2_MISC_ENABLE_SET_BITS, NX2_MISC_ENABLE_DEFAULT);
   }
   readReg32(NX2_MISC_ENABLE_SET_BITS);
   IODelay(20);
@@ -339,16 +356,25 @@ bool AzulNX2Ethernet::initControllerChip() {
   
   enableInterrupts(true);
   
-  probePHY();
+  updatePHYMediaState();
   
-  resetPHY();
-  enablePHYAutoMDIX();
+  //resetPHY();
+ // enablePHYAutoMDIX();
  // enablePHYLoopback();
-  enablePHYAutoNegotiation();
+  //enablePHYAutoNegotiation();
   
   
   enableInterrupts(true); // Required after reset due to 10/100 issues?
-  
-  isEnabled = true;
   return true;
+}
+
+void AzulNX2Ethernet::stopController() {
+  //
+  // Stop controller blocks and disable interrupts.
+  //
+  writeReg32(NX2_MISC_ENABLE_CLR_BITS, NX2_MISC_ENABLE_CLR_DEFAULT);
+  readReg32(NX2_MISC_ENABLE_CLR_BITS);
+  IODelay(20);
+  
+  disableInterrupts();
 }
