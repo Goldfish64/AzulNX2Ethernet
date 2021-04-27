@@ -38,36 +38,66 @@ static const struct nx2_device_type {
   //
   // BCM5706C controllers.
   //
+  { BRCM_VENDORID, BRCM_DEVICEID_BCM5706, HP_VENDORID, 0x3101,
+    "HP", "NC370T Gigabit Ethernet" },
+  { BRCM_VENDORID, BRCM_DEVICEID_BCM5706, HP_VENDORID, 0x3106,
+    "HP", "NC370i Integrated Gigabit Ethernet" },
+  { BRCM_VENDORID, BRCM_DEVICEID_BCM5706, HP_VENDORID, 0x3070,
+    "HP", "NC380T Dual Port Gigabit Ethernet" },
+  { BRCM_VENDORID, BRCM_DEVICEID_BCM5706, HP_VENDORID, 0x1709,
+    "HP", "NC371i Integrated Gigabit Ethernet" },
   { BRCM_VENDORID, BRCM_DEVICEID_BCM5706, PCI_ANY_ID, PCI_ANY_ID,
     "QLogic", "NetXtreme II BCM5706 Gigabit Ethernet" },
   
   //
   // BCM5706S controllers.
   //
+  { BRCM_VENDORID, BRCM_DEVICEID_BCM5706S, HP_VENDORID, 0x3102,
+    "HP", "NC370F Gigabit Ethernet" },
   { BRCM_VENDORID, BRCM_DEVICEID_BCM5706S, PCI_ANY_ID, PCI_ANY_ID,
     "QLogic", "NetXtreme II BCM5706S Gigabit Ethernet" },
   
   //
   // BCM5708C controllers.
   //
+  { BRCM_VENDORID, BRCM_DEVICEID_BCM5708, HP_VENDORID, 0x7037,
+    "HP", "NC373T Gigabit Ethernet" },
+  { BRCM_VENDORID, BRCM_DEVICEID_BCM5708, HP_VENDORID, 0x7039,
+    "HP", "NC373i Integrated Gigabit Ethernet" },
+  { BRCM_VENDORID, BRCM_DEVICEID_BCM5708, HP_VENDORID, 0x7045,
+    "HP", "NC374m Dual Port Gigabit Ethernet" },
   { BRCM_VENDORID, BRCM_DEVICEID_BCM5708, PCI_ANY_ID, PCI_ANY_ID,
     "QLogic", "NetXtreme II BCM5708 Gigabit Ethernet" },
   
   //
   // BCM5708S controllers.
   //
+  { BRCM_VENDORID, BRCM_DEVICEID_BCM5708S, HP_VENDORID, 0x1706,
+    "HP", "NC373m Dual Port Gigabit Ethernet" },
+  { BRCM_VENDORID, BRCM_DEVICEID_BCM5708S, HP_VENDORID, 0x703B,
+    "HP", "NC373i Integrated Gigabit Ethernet" },
+  { BRCM_VENDORID, BRCM_DEVICEID_BCM5708S, HP_VENDORID, 0x703D,
+    "HP", "NC373F Gigabit Ethernet" },
   { BRCM_VENDORID, BRCM_DEVICEID_BCM5708S, PCI_ANY_ID, PCI_ANY_ID,
     "QLogic", "NetXtreme II BCM5708S Gigabit Ethernet" },
   
   //
   // BCM5709C controllers.
   //
+  { BRCM_VENDORID, BRCM_DEVICEID_BCM5709, HP_VENDORID, 0x7055,
+    "HP", "NC382i Integrated Dual Port Gigabit Ethernet" },
+  { BRCM_VENDORID, BRCM_DEVICEID_BCM5709, HP_VENDORID, 0x7059,
+    "HP", "NC382T Dual Port Gigabit Ethernet" },
   { BRCM_VENDORID, BRCM_DEVICEID_BCM5709, PCI_ANY_ID, PCI_ANY_ID,
     "QLogic", "NetXtreme II BCM5709 Gigabit Ethernet" },
   
   //
   // BCM5709S controllers.
   //
+  { BRCM_VENDORID, BRCM_DEVICEID_BCM5709S, HP_VENDORID, 0x171D,
+    "HP", "NC382m Dual Port Gigabit Ethernet" },
+  { BRCM_VENDORID, BRCM_DEVICEID_BCM5709S, HP_VENDORID, 0x7056,
+    "HP", "NC382i Integrated Dual Port Gigabit Ethernet" },
   { BRCM_VENDORID, BRCM_DEVICEID_BCM5709S, PCI_ANY_ID, PCI_ANY_ID,
     "QLogic", "NetXtreme II BCM5709S Gigabit Ethernet" },
   
@@ -213,27 +243,27 @@ bool AzulNX2Ethernet::initEventSources(IOService *provider) {
 }
 
 const char* AzulNX2Ethernet::getDeviceVendor() const {
-  for (UInt32 i = 0; i < sizeof (deviceNames); i++) {
+  for (UInt32 i = 0; i < sizeof (deviceNames) / sizeof (nx2_device_type); i++) {
     if (pciVendorId == deviceNames[i].vendorId && pciDeviceId == deviceNames[i].deviceId &&
         (pciSubVendorId == deviceNames[i].subVendorId || deviceNames[i].subVendorId == PCI_ANY_ID) &&
-        (pciDeviceId == deviceNames[i].subDeviceId || deviceNames[i].subDeviceId == PCI_ANY_ID)) {
+        (pciSubDeviceId == deviceNames[i].subDeviceId || deviceNames[i].subDeviceId == PCI_ANY_ID)) {
       return deviceNames[i].vendor;
     }
   }
   
-  return NULL;
+  return "Unknown";
 }
 
 const char* AzulNX2Ethernet::getDeviceModel() const {
-  for (UInt32 i = 0; i < sizeof (deviceNames); i++) {
+  for (UInt32 i = 0; i < sizeof (deviceNames) / sizeof (nx2_device_type); i++) {
     if (pciVendorId == deviceNames[i].vendorId && pciDeviceId == deviceNames[i].deviceId &&
         (pciSubVendorId == deviceNames[i].subVendorId || deviceNames[i].subVendorId == PCI_ANY_ID) &&
-        (pciDeviceId == deviceNames[i].subDeviceId || deviceNames[i].subDeviceId == PCI_ANY_ID)) {
+        (pciSubDeviceId == deviceNames[i].subDeviceId || deviceNames[i].subDeviceId == PCI_ANY_ID)) {
       return deviceNames[i].model;
     }
   }
   
-  return NULL;
+  return "Unknown";
 }
 
 void AzulNX2Ethernet::enableInterrupts(bool coalNow) {

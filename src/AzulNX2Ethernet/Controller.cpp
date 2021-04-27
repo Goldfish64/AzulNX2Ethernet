@@ -27,6 +27,12 @@ bool AzulNX2Ethernet::prepareController() {
   UInt32 reg;
   
   //
+  // Ensure PCI device is fully enabled.
+  //
+  pciNub->setBusMasterEnable(true);
+  pciNub->setMemoryEnable(true);
+  
+  //
   // Get chip ID. Non-production revisions are not supported.
   //
   chipId = readReg32(NX2_MISC_ID);
@@ -43,9 +49,6 @@ bool AzulNX2Ethernet::prepareController() {
       return false;
   }
   
-  pciNub->setBusMasterEnable(true);
-  pciNub->setMemoryEnable(true);
-  
   pciVendorId    = readReg16(kIOPCIConfigVendorID);
   pciDeviceId    = readReg16(kIOPCIConfigDeviceID);
   pciSubVendorId = readReg16(kIOPCIConfigSubSystemVendorID);
@@ -55,6 +58,9 @@ bool AzulNX2Ethernet::prepareController() {
   snprintf(modelName, sizeof (modelName), "%s %s", getDeviceVendor(), getDeviceModel());
   setProperty("model", modelName);
   SYSLOG("Controller is %s, revision %c%d", modelName, ((NX2_CHIP_ID & 0xF000) >> 12) + 'A', (NX2_CHIP_ID & 0x0FF0) >> 4);
+  DBGLOG("PCI device %02x:%02x.%x, ID %04X:%04X (%04X:%04X)",
+         pciNub->getBusNumber(), pciNub->getDeviceNumber(), pciNub->getFunctionNumber(),
+         pciVendorId, pciDeviceId, pciSubVendorId, pciSubDeviceId);
   
   //
   // Enable the REG_WINDOW register for indirect reads/writes, and enable mailbox word swapping.
