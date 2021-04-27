@@ -228,7 +228,6 @@ void AzulNX2Ethernet::handleTxInterrupt(UInt16 txConsNew) {
       txPackets[txIndex] = NULL;
     }
     
-  //  DBGLOG("TX packet %u (actual %u) is completed", txCons, txIndex);
     txFreeDescriptors++;
     txCons = TX_NEXT_BD(txCons);
   }
@@ -340,17 +339,17 @@ UInt16 AzulNX2Ethernet::readRxCons() { // TODO: make inline
 }
 
 void AzulNX2Ethernet::handleRxInterrupt(UInt16 rxConsNew) {
+  UInt16                rxIndex;
   mbuf_t                inputPacket;
-  UInt16                packetLength;
-  UInt32                checksumValidMask = 0;
+
   rx_l2_header_t        *l2Header;
+  UInt16                packetLength;
   
-  UInt16 rxIndex;
+  UInt32                checksumValidMask = 0;
   
   //
   // Process any newly received packets.
   //
- // DBGLOG("start idx %u %u", rxCons, rxConsNew);
   while (rxCons != rxConsNew) {
     rxIndex = RX_BD_INDEX(rxCons);
     rxCons  = RX_NEXT_BD(rxCons);
@@ -360,8 +359,13 @@ void AzulNX2Ethernet::handleRxInterrupt(UInt16 rxConsNew) {
     //
     inputPacket = rxPackets[rxIndex];
     l2Header = (rx_l2_header_t*) mbuf_data(inputPacket);
+    packetLength = l2Header->packetLength - kIOEthernetCRCSize;
     
-    if (l2Header == NULL) {
+    //
+    // Don't send garbage to the OS.
+    //
+    if (packetLength > MAX_PACKET_SIZE || l2Header->errors != 0) {
+      DBGLOG("RX error start len %u sts %u err %u idx %u", packetLength, l2Header->status, l2Header->errors, rxIndex);
       freePacket(inputPacket);
       initRxDescriptor(rxIndex, true);
       continue;
@@ -377,35 +381,29 @@ void AzulNX2Ethernet::handleRxInterrupt(UInt16 rxConsNew) {
       checksumValidMask |= kChecksumUDP;
     }
     
-    //replaceOrCopyPacket()
+    //
+    // Trim off front header and rear ethernet CRC.
+    //
+    mbuf_adj(inputPacket, sizeof (rx_l2_header_t) + RX_HEADER_PAD);
+    mbuf_adj(inputPacket, -kIOEthernetCRCSize);
     
-    //DBGLOG("start len %u sts %u err %u idx %u", l2Header->packetLength, l2Header->status, l2Header->errors, rxIndex);
-    packetLength = l2Header->packetLength - 4;
-    
-    if (packetLength > MAX_PACKET_SIZE || l2Header->errors != 0) {
-      DBGLOG("RX error start len %u sts %u err %u idx %u", l2Header->packetLength, l2Header->status, l2Header->errors, rxIndex);
-      freePacket(inputPacket);
-      initRxDescriptor(rxIndex, true);
-      continue;
-    }
-    
-    mbuf_adj(inputPacket,  sizeof (rx_l2_header_t) + 2);
-    mbuf_adj(inputPacket, -4);
-    
+    //
+    // Submit packet and prepare the descriptor for the next use.
+    //
     setChecksumResult(inputPacket, kChecksumFamilyTCPIP, (kChecksumIP | kChecksumTCP | kChecksumUDP), checksumValidMask);
-    
-  //  UInt8 *data = (UInt8*)mbuf_data(inputPacket);
-    
-    
-   // DBGLOG("data %X %X %X %X %X %X %X len %u", data[0], data[1], data[2], data[3], data[4], data[5], data[6], mbuf_len(inputPacket));
-    
-    ethInterface->inputPacket(inputPacket, packetLength, 0);
+    ethInterface->inputPacket(inputPacket, packetLength, IOEthernetInterface::kInputOptionQueuePacket);
     
     initRxDescriptor(rxIndex, true);
   }
   
   writeReg16(MB_GET_CID_ADDR(RX_CID) + NX2_L2MQ_RX_HOST_BDIDX, rxProd);
   writeReg32(MB_GET_CID_ADDR(RX_CID) + NX2_L2MQ_RX_HOST_BSEQ, rxProdBufferSize);
+  
+  //
+  // When using a queued input method (kInputOptionQueuePacket in inputPacket),
+  // the queue must be flushed at the end of the interrupt handler.
+  //
+  ethInterface->flushInputQueue();
 }
 
 void AzulNX2Ethernet::setRxMode(bool promiscuous) {

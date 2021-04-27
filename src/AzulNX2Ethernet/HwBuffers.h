@@ -30,6 +30,8 @@
 #define MAX_PACKET_SIZE           (kIOEthernetMaxPacketSize + 4)
 #define TX_QUEUE_LENGTH           1000
 
+#define RX_HEADER_PAD             2
+
 //
 // Status block structure.
 //
